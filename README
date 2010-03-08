@@ -1,0 +1,68 @@
+=======================================
+Welcome to the Timber compiler sources!
+=======================================
+
+
+Requirements
+============
+
+To compile the Timber compiler, you'll need
+
+   ghc (haskell.org/ghc)
+   gcc (gcc.gnu.org)
+
+Furthermore, to compile the grammar (Parser.y into Parser.hs) you'll need
+
+   happy (haskell.org/happy)
+
+Version numbers known to work are ghc 6.10.1, happy 1.17, and gcc 4.0.
+
+
+Installing
+=============
+
+If you have the cabal-install package installed, the following works:
+
+   cabal install timberc
+
+If you would rather do a manual installation of the compiler in the default 
+location (you may need root privileges for this), use the following commands:
+
+   runhaskell Setup.lhs configure
+   runhaskell Setup.lhs build
+   runhaskell Setup.lhs install
+
+You can select another location for the installation of the compiler by 
+using the following commands:
+
+   runhaskell Setup.lhs configure --user --prefix=<the install path>
+   runhaskell Setup.lhs build
+   runhaskell Setup.lhs install
+
+You can also give other options to the installation script, see
+
+   runhaskell Setup.lhs configure --help.
+
+
+Running
+=======
+
+For info on how to run the compiler once installed, type
+
+   timberc --help
+
+
+Reporting bugs
+==============
+
+Please use the Trac system at 
+
+   http://trac.haskell.org/timber/
+
+
+Further information
+===================
+
+Please visit
+
+   http://timber-lang.org

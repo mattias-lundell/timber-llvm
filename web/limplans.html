@@ -1,0 +1,69 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">
+<html> <head>
+<title>Limitations and future plans</title>
+<link href="simplestyle.css" rel="stylesheet" type="text/css">
+</head>
+
+<body>
+<h3>Current limitations</h3>
+<ul>
+<li>
+Compiler error messages, especially those resulting from type errors, are far from satisfactory.
+<li>
+Recursive typeclass instances are naively generated, sometimes resulting in extensive work
+duplication.
+<li>
+Garbage collection of objects with a state including arrays is sensitive to an (unlikely) 
+race condition that may cause state updates to be forgotten.
+<li>
+The <tt><b>abort</b></tt> primitive will sometimes fail to abort a message that has been scheduled
+to start but yet not been received.
+<li>
+Deadlock detection is currently not implemented.
+<li>
+The Prelude module is very preliminary. As for the library, this release
+offers only a small selection of modules to support examples and indicate possible structure.
+  
+</ul>
+
+
+<h3>Plans for the next release (Q1 2009)</h3>
+<ul>
+<li>
+Fix the <tt><b>abort</b></tt> and deadlock detection deficiencies.
+<li>
+Add multidimensional flat arrays to the compiler back-end language, which will
+improve the efficiency of array operations in general (and also solve the garbage collection
+problem mentioned above).
+<li>
+Merge the Timber 
+<a href="http://www.csee.ltu.se/~pj/papers/scp/popl09-scp.pdf" target="_blank">supercompiler</a>
+into the main branch of the implementation, thereby adressing 
+the generated code quality of recursive terms overall, including recursively defined instances.
+<li>
+Make a substantial overhaul of the error reporting infrastructure of the compiler.
+<li>
+Add a GUI interface to the POSIX run-time environment.
+<li>
+Provide a proof-of-concept run-time environment for a bare-metal target platform: the ARM7.
+</ul>
+
+
+<h3>Longer term plans</h3>
+<ul>
+<li>
+Add exception handling to the language.
+<li>
+Extend the type system with support for functional dependencies.
+<li>
+Turn subtyping coercions into simple casts along the left branch of every subtype hierarchy.
+<li>
+Extend the syntax to allow explicit <em>self</em> parameters, explicit state types and explicit 
+overloading witnesses.
+<li>
+Implement a generic OpenGL interface.
+<li>
+Add support for more bare-metal target platforms.
+</ul>
+<script type="text/javascript"> var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www."); document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E")); </script> <script type="text/javascript"> try { var pageTracker = _gat._getTracker("UA-5102454-2"); pageTracker._trackPageview(); } catch(err) {}</script>
+</body> </html>

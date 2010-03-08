@@ -1,0 +1,148 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">
+<html> <head>
+<title>Lexical structure</title>
+<link href="simplestyle.css" rel="stylesheet" type="text/css">
+</head>
+<body>
+<h3>Lexical structure</h3>
+<h4>Comments</h4>
+<p>
+A Timber program may contain two kinds of comments:
+<ul>
+  <li>A line comment starts with the lexeme <tt>--</tt> and extends to the next newline.
+</li>
+  <li>A general comment starts with <tt>{-</tt> and extends to the first matching
+<tt>-}</tt>. This allows for nested general comments; a closing <tt>-}</tt> matches only
+one opening <tt>{-</tt>.</li>
+</ul>
+<h4>Names</h4>
+<p>
+A Timber program consists mainly of definitions that give meaning to names. There are six
+separate namespaces in Timber:
+<ul>
+  <li> <em>variables</em>, <em>selectors</em> and <em>constructors</em>, which all denote
+  different kinds of values.
+  </li>
+  <li> <em>type constructors</em> and <em>type variables</em>, which denote types.</li>
+  <li><em>module names</em>, which refer to modules.
+</ul>
+<p>
+Names are <em>simple</em> or <em>qualified</em>; the latter are used to disambiguate names defined in different modules.
+<h4>Simple names</h4>
+<p>
+Simple names come in two lexically distinct forms, <em>identifiers</em> and <em>operators</em>.
+<p>
+An identifier consists of a letter followed by zero or more letters, digits, single quotes and underscores.
+The initial letter must be upper case for constructors, type constructors and
+module names, and must be lower case for variables, selectors and type variables. The following lexically correct
+identifiers are keywords of the language and may not be used as names:
+<pre>
+<b>
+action    after     before    case      class
+data      do        default   else      elsif
+forall    if        import    in        instance  
+let       module    new       of        private
+request   result    struct    then      type      
+typeclass use       where       
+</b>
+</pre> 
+<p> An operator is a sequence of one or more <em>symbol characters</em>.
+The symbol characters are defined by enumeration: <tt>:!#$%&*+\<=>?@\^|-~</tt>.
+An operator starting with <tt>:</tt> is a constructor; otherwise it is a variable. Only
+variables and constructors have operator forms; the other four namespaces contain only
+identifiers. The following lexically correct operators are keywords and may not be used
+as names:
+<pre>
+.    ..   ::   :=   =    \    \\   |    <-   ->   --
+</pre>
+<p>
+An identifier may be used as an operator by enclosing it in backquotes; <tt>`elem`</tt> is an operator.
+Conversely, an operator may be used as an identifier by enclosing it in parentheses; <tt>(+)</tt> is an identifier.
+
+<p> Examples:
+<table align=center><TR>
+  <TH>Names
+</TH> 
+<TH> Possible namespaces
+</TH>
+</TR>
+<TR><TD><tt>Color, T3, T_3, T_3'</tt></TD><TD> constructors, type constructors, module names</TD></TR>
+<TR><TD><tt>x, env, myTable, a', x_1</tt></TD><TD>variables, selectors, type variables</TD></TR>
+<TR><TD><tt>+, #=#, @@</tt></TD><TD>variables</TD></TR>
+<TR><TD><tt>:, :++:</tt></TD><TD>constructors</TD></TR>
+<TR><TD><tt>#3</tt></TD><TD>ILLEGAL; mixture of operator and identifier symbols.</TD></TR>
+</table>
+<h4>Precedence and associativity</h4>
+<p>
+The precedence and associativity of operators are determined by their syntax. The operators in the following table
+are listed in decreasing precedence, i.e. an operator that appears in a later row binds less tightly. Function application,
+denoted by juxtaposition, binds tighter than all operators.
+
+<table align=center><TR>
+  <TH>Operators
+</TH> 
+<TH> Associativity
+</TH>
+</TR>
+<TR><TD><tt>@</tt></TD><TD align=center>Right</TD></TR>
+<TR><TD><tt>^</tt></TD><TD align=center>Right</TD></TR>
+<TR><TD><tt>* / `div` `mod`</tt></TD><TD align=center>Left</TD></TR>
+<TR><TD><tt>+ -</tt></TD><TD align=center>Left</TD></TR>
+<TR><TD><tt>: ++</tt></TD><TD align=center>Right</TD></TR>
+<TR><TD><tt>== /= < > <= >=</tt></TD><TD align=center>None</TD></TR>
+<TR><TD><tt>&&</tt></TD><TD align=center>Right</TD></TR>
+<TR><TD><tt>||</tt></TD><TD align=center>Right</TD></TR>
+<TR><TD><tt> >> >>=</tt></TD><TD align=center>Left</TD></TR>
+<TR><TD><tt>$</tt></TD><TD align=center>Right</TD></TR>
+</table>
+For an operator that is not listed in the above table, the precedence is determined by
+first deleting all characters except <tt>+-*/<></tt>. If what remains is
+<ul>
+  <li> a non-empty
+sequence of <tt>+</tt> and <tt>-</tt> characters, the associativity and precedence of the operator are the same as
+those of <tt>+</tt> and <tt>-</tt>.</li>
+  <li> a non-empty sequence of <tt>*</tt> and <tt>/</tt> characters, the associativity and precedence of the operator are the same as
+those of <tt>*</tt> and <tt>/</tt>.</li>
+  <li> a non-empty sequence <tt><</tt> and <tt>></tt> characters, the associativity and precedence of the operator are the same as
+those of <tt><</tt> and <tt>></tt>.</li>
+  <li> something else, the associativity and precedence of the operator are the same as those of <tt>@</tt>.</li>
+</ul>
+<p>
+The operators in the table above are defined in the Prelude, but can be redefined in user modules, except for the following
+three exceptions:
+<ul>
+<li> <tt>:</tt> is the list construction operator and is supported by special syntax;
+the notation <tt> [a, b, c]</tt> is syntactic sugar for the list <tt>a : b : c : []</tt>.
+  <p>
+  In harmony with this, the empty list has the (lexically illegal) name <tt>[]</tt>.
+<li> The operators <tt>&&</tt> and <tt>||</tt>, denoting logical and and or, respectively, are predefined in the language
+and are non-strict in their right operand.
+<p>
+  This means that, if evaluation of <em>a</em> in
+<em>a</em> <tt>&&</tt> <em>b</em> gives <tt>False</tt> as result, the result of the complete expression is <tt>False</tt> and
+<em>b</em> is
+not evaluated (and, in particular, a runtime error or non-termination that would occur during evaluation of <em>b</em> is avoided).
+<p>
+Similarly, if the left operand to <tt>||</tt> evaluates to <tt>True</tt>, the result of the complete expression is
+<tt>True</tt> without evaluating the right operand.
+<p>
+Thus, semantically speaking, <tt>&&</tt> and <tt>||</tt> are not operators at all but special expression-forming constructs. </li>
+</ul>
+<h4>Qualified names</h4>
+<p>
+Timber modules are used to manage namespaces. In this mechanism, simple names are extended to qualified forms, where the
+simple name is prefixed by the name of the module where it is defined. To allow several modules with the same name in a system,
+module names themselves may be qualified.
+<p> A <em>qualified module name</em> is a sequence of simple module names interspersed with periods, such as
+<tt>Data.Functional.List</tt>. The module name (given in the module header) is here just <tt>List</tt>, but the full name must be used by
+importing clients and is also used by the Timber installation to store and retrieve modules in the file system. Exactly how this is done is
+installation-dependent.
+<p>
+Imagine a module <tt>Dictionary</tt>, which defines among others the names <tt>insert</tt> and <tt>|-></tt>. An importing module may
+refer to these names using the qualified forms <tt>Dictionary.insert</tt> and <tt>Dictionary.|-></tt> in order to avoid possible name conflicts. See the modules page for more information on import and use of other modules.The simple name that is the suffix of a qualified name decides if the
+name is an operator or an identifier and if it is a constructor or not.
+<p>
+A qualified name may not be used at a defining occurrence, only when a name is used. (The module prefix is uniquely determined by
+the module name, hence superfluous in the definition.)
+<script type="text/javascript"> var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www."); document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E")); </script> <script type="text/javascript"> try { var pageTracker = _gat._getTracker("UA-5102454-2"); pageTracker._trackPageview(); } catch(err) {}</script>
+</body> </html>

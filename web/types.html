@@ -1,0 +1,291 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">
+<html> <head>
+<title>Types and type declarations</title>
+<link href="simplestyle.css" rel="stylesheet" type="text/css">
+</head>
+
+<body>
+<h2>Types and type declarations</h2>
+<h3>Types and type constructors</h3>
+<p>
+Values in Timber are classified into <em>types</em>. The integer value 7 has type <tt>Int</tt>, a fact that is expressed
+in Timber as <tt>7 :: Int</tt>, so <tt>::</tt> is read "has type". One seldom adds such explicit type information to expressions
+in Timber code, but it is allowed to do so. More common is to supply type signatures as documentation to
+top-level definitions, but also these can be omitted, leaving to the Timber compiler to infer types.
+<p>
+Timber also has <em>type constructors</em>, which can be thought of as functions that take types as arguments and give a type as
+result. An example is the primitive type constructor <tt>Request</tt>, which takes a type <em>a</em> as an argument and constructs
+the type <tt>Request</tt> <em>a</em> of methods (in the object-oriented sense) returning a value of type <em>a</em>.
+
+<a name="kind"><h3>Kinds and kind declarations</h3></a>
+<p>
+Timber types and type constructors are classified by their <em>kind</em>. All types have kind <tt>*</tt>, while
+type constructors that expect one type argument (such as e.g. <tt>Request</tt>) have
+kind <tt>* -> *</tt>. In general, a kind is either <tt>*</tt> or <em>k1</em> <tt>-></tt> <em>k2</em> where <em>k1</em> and 
+<em>k2</em> are kinds. A type constructor of kind  <em>k1</em> <tt>-></tt> <em>k2</em> expects an argument of kind <em>k1</em>; 
+the result is then a type (constructor) of kind <em>k2</em>.
+<p>
+The programmer may declare the kind of a type constructor in a top-level kind declaration:<p>
+<pre>
+<em>con</em> :: <em>kind</em>
+</pre>
+<p>
+This is particularly useful when defining abstract data types; in the public part of a module one declares the kind of
+an abstract type and the signatures of the operators; the actual type definition and equations are given in the private part.
+<p>
+  <table align=center><TR>
+<TH> Examples
+</TH><TH>Comments</TH>
+</TR>
+<TR><TD><tt>Stack :: * -> *</tt></TD><TD>Stacks with elements of arbitrary type</TD></TR>
+<TR><TD><tt>Dictionary :: * -> * -> *</tt></TD><TD>Dictionaries storing info about keys</TD></TR>
+</table>
+
+
+<h3>Primitive types</h3>
+<p>
+We first describe the primitive types of Timber. In Timber code it is always clear from the context whether
+an expression denotes a type or a value, so some types use the same syntax for type expressions as for
+values, without confusion. (A beginner might disagree about the last two words.)
+
+<h4>Primitive simple types</h4>
+<p>
+As part of the language, the following primitive types are provided:
+<ul>
+  <li> The type <tt>Int</tt> of finite-precision integers.</li>
+  <li> The type <tt>Float</tt> of single-precision floating-point numbers.</li>
+  <li> The type <tt>Char</tt> of characters.</li>
+  <li> The type <tt>Time</tt> of time intervals.</li>
+  <li> The type <tt>Bool</tt>, with the two values <tt>True</tt> and <tt>False</tt>.</li>
+  <li> The type <tt>()</tt> (pronounced "unit"), containing the single value <tt>()</tt>.
+  <li> The type <tt>OID</tt> of object identities, which support test for identity between objects.
+</ul>
+<p>
+Literals of types <tt>Int</tt> and <tt>Float</tt> are as in most programming languages; integer constants can be
+given in octal or hexadecimal formed if prefixed by <tt>0o</tt> and <tt>0x</tt>, respectively.
+<p>
+Time values are expressed using the primitive functions <tt>sec</tt>, <tt>millisec</tt>, <tt>microsec</tt> and <tt>nanosec</tt>,
+which all take an integer argument and return a <tt>Time</tt> value. Of course, <tt>millisec 1000</tt> and <tt>sec 1</tt> denote
+the same value.
+<p>
+Character literals are written within
+single quoutes as in 'a' or '3'; common escaped characters are '\n' and '\t' for newline and tab, respectively. (Many other forms of
+character literals omitted.)
+<h4>Primitive type constructors</h4>
+<p>
+The following type constructors are also primitive in the language.
+<ul>
+<li>Lists.<p>The type <tt>[a]</tt>, for any type <tt>a</tt>, contains finite lists of values of type <tt>a</tt>.
+  The list <tt>[3, 6, 7, 1]</tt> has type <tt>[Int]</tt> and <tt>[[3, 2], [4, -1, 7]]</tt> has type <tt>[[Int]]</tt>
+  (however, see the overloading page for more general types of these lists).
+<li>Tuples.<p>
+For arbitrary types <tt>a1</tt>,<tt>a2,</tt><tt>...</tt><tt>an</tt>, we can form the tuple type <tt>(a1, a2, ..., an)</tt>.
+Values use the same notation so <tt>(True,'a')</tt> has type <tt>(Bool,Char)</tt>.
+</li>
+<li>Arrays.<p>
+For any type <tt>a</tt>, the type <tt>Array a</tt> consists of a sequence of <tt>a</tt> values, organized so that one can access
+all values by index in constant time. Arrays are particularly useful as state variables in objects, where they may also be
+updated in imperative style.</li>
+<li>Functions.<p> For any two types <tt>a</tt> and <tt>b</tt>, <tt>a -> b</tt> is the type of functions from <tt>a</tt> to <tt>b</tt>.
+<tt>-></tt> associates to the right, so <tt>a -> b -> c</tt> parses as <tt> a -> (b -> c)</tt>.
+<li>Either.<p>
+This type could be defined in Timber as
+<pre>
+<b>data</b> Either a b = Left a | Right b
+</pre>
+<p>
+It is only primitive because of its role in generating default instances.</li>
+<li>Classes.<p>
+For any type <tt>a</tt>, the type <tt>Class a</tt> contains templates from which one can instantiate objects
+with interface of type <tt>a</tt>. Of particular
+interest is the case where <tt>a</tt> is a struct type with a number of methods manipulating an internal state of the object.</li>
+<li>Actions.<p>
+<tt>Action</tt> is the type of asynhronous methods. An object may offer an <tt>Action</tt> in its interface; a client who
+has access to this interface may send the object an action message with appropriate arguments. The message will, at an unspecified 
+later point in time, execute the action, with exclusive access to the object's state.</li>
+<li>Requests.<p>
+For any type <tt>a</tt>, <tt>Request a</tt> is the type of synchronous methods that return a value of type <tt>a</tt>.
+An object may offer a <tt>Request</tt> in its interface; a client who has access to this interface may then send a 
+request message with appropriate arguments and wait for the result. Since all methods require exclusive access to the state of the
+receiving object during execution, cycles of requests lead to deadlock. Deadlock is detected by the runtime system and an exception
+is raised.</li>
+<li>Commands.<p> For any two types <tt>s</tt> and <tt>a</tt>, <tt>Cmd s a</tt> is the type of procedures that can execute in a
+state <tt>s</tt> and return a value of type <tt>a</tt>.
+<li> Object references.<p>
+For any type <tt>a</tt>, <tt>Ref a</tt> is the type of references to
+objects with interface of type <tt>a</tt>.
+<li> The struct type <tt>Timer</tt>, which is used as interface to the
+primitive timers of the language; see the <a href="time.html">Time
+constructs</a> page for details.
+</li>
+</ul>
+<h3>Polymorphic types</h3>
+<p>
+We can now form complex types such as
+<p>
+<table align=center><TR>
+<TH> Examples
+</TH></TR>
+<TR><TD><tt>Int -> Int -> Bool</tt></TD></TR>
+<TR><TD><tt>[Int] -> Int</tt></TD></TR>
+<TR><TD><tt>(a -> Bool) -> [a] -> [a]</tt></TD></TR>
+</table>
+<p>
+The two first examples are <em>monomorphic</em>; they involve only known types and type constructors. The third is 
+<em>polymorphic</em>; it involves the type variable <tt>a</tt> (a type variable since it starts with a lower-case letter),
+that stands for an arbitrary type. A function possessing this type can be used at any type obtained by substituting a type 
+for <tt>a</tt>.
+<p>
+The type variable <tt>a</tt> is implicitly bound in such a type expression; one should think of an implicit "for all a"
+quantification prepended to the type expression.
+<a name="type"><h3>Data types</h3></a>
+<p>
+The programmer may introduce new ways of constructing data by defining <em>data types</em>. The simplest case is 
+enumeration types like
+<pre>
+<b>data</b> Day = Mon | Tue | Wed | Thu | Fri | Sat | Sun
+</pre>
+The type <tt>Day</tt> contains the seven constructor values that are enumerated in the right hand side.
+<p>
+The constructors may have arguments, as in
+<pre>
+<b>data</b> Temp = Fahrenheit Int | Celsius Int
+</pre>
+<p>
+Values in type <tt>Temp</tt> are e.g., <tt>Fahrenheit 451</tt> and <tt>Celsius 100</tt>. There may be one, two or
+more alternatives and a constructor may have more than one argument. A data type for a web log entry might be
+<pre>
+<b>data</b> Entry = Entry IPAddress Date URL Method Int
+</pre>
+<p>
+where a value of type <tt>Entry</tt> might be
+<pre>
+Entry "123.456.789.000" (May 29 2007) "http://www.abc.def"  GET 321
+</pre>
+<p>
+given suitable type definitions for the other types involved. Note that the type and the constructor have the same name; 
+this is OK since types and constructors live in different namespaces.
+<p>
+We may also define parameterised data types:
+<pre>
+<b>data</b> Tree a b = Nil | Branch (Tree a b) a b (Tree a b)
+</pre>
+<p>
+<tt>Tree</tt> thus has kind <tt>* -> * -> *</tt> and a  value of type <tt>Tree String Int</tt> is a binary tree with a 
+<tt>String</tt> and an <tt>Int</tt> stored in each internal node.
+<p>
+Two different data types may not use the same constructor name; with the above definition, no other data type 
+<em>in the same module</em> can use constructor <tt>Nil</tt>. For data types in imported modules there is no problem 
+if they use <tt>Nil</tt>; only that the qualified name must be used for the imported constructor.
+
+<h3>Struct types</h3>
+<p>
+Struct, or record, types collect values bound to named selectors. Declarations have the syntax
+<p>
+<pre>
+<b>struct</b> <em>con</em> <em>var</em><font color=red>*</font> <b>where</b>
+  <em>sig</em><font color=red>+</font>
+</pre>
+<p>
+<table align=center><TR>
+<TH> Examples
+</TH></TR>
+<TR><TD><tt><b>struct</b> Point <b>where</b></tt></TD></TR>
+<TR><TD><tt>&nbsp;&nbsp;x, y :: Int</tt></TD></TR>
+<TR><TD><tt><b>struct</b> Dictionary a b <b>where</b></tt></TD></TR>
+<TR><TD><tt>&nbsp;&nbsp;insert :: a -> b -> Action</tt></TD></TR>
+<TR><TD><tt>&nbsp;&nbsp;lookup :: a -> Request (Maybe b)</tt></TD></TR>
+</table>
+<p>
+An example value of type <tt>Point</tt> is <tt>Point {x=3, y=7}</tt>.  The order between the fields is not significant, so
+<tt>Point {y=7, x=3}</tt> is the same value. Similarly as for constructors, two different struct types in the
+same module may not use the same selector name.
+Thus a struct value is uniquely defined by the collection of selectors and the type name can be omitted from the value; 
+<tt>{x=3, y=7}</tt> is again the same value.
+<p>
+If <tt>p :: Point</tt>, the selectors are accessed using dot notation, so the two integer coordinates are
+<tt>p.x</tt> and <tt>p.y</tt>, respectively.
+<p>
+A struct type may have any number of selectors and the types of selectors are arbitrary. A struct type may also be parameterised
+as shown by <tt>Dictionary</tt>, a type suitable as an interface to an object that acts as a dictionary, storing information of 
+type <tt>b</tt> about keys
+of type <tt>a</tt>. (The result type <tt>Maybe b</tt> for <tt>lookup</tt> is intended to capture the possibility that the given
+key is not stored in the dictionary; the prelude defines <tt>data Maybe a = Nothing | Just a</tt>.)
+
+<h3>Type synonyms</h3>
+<p>
+The user may introduce new names for existing types:
+<pre>
+<b>type</b> Age = Int
+<b>type</b> IPAddress = String
+<b>type</b> List a = [a]
+<b>type</b> Pair a b = (a,b)
+</pre>
+<p>
+Such definitions do not introduce new types; they can only be helpful to improve program readability. They may not be recursive and
+can not be partially applied (i.e., <tt>Pair Int</tt> is not a legal type constructor). The prelude introduces one type synonym:
+<pre>
+<b>type</b> String = [Char]
+</pre>
+<h3>Subtyping</h3>
+<h4>Subtyping for struct types</h4>
+<p>
+Struct types and data types may be defined in subtype hierarchies. As an example, we can extend <tt>Point</tt>:
+<pre>
+<b>struct</b> Point3 < Point <b>where</b>
+  z :: Int
+</pre>
+<p>
+We define <tt>Point3</tt> to be a subtype of <tt>Point</tt>; for struct types this means that <tt>Point3</tt> has all the selectors
+of <tt>Point</tt> and possibly some more (in the example, one more: <tt>z</tt>). So we have <tt>{x=0, y=3, z=5} :: Point3</tt>.
+A function that expects a <tt>Point</tt> as argument can be given a <tt>Point3</tt> without problem, since all the function can do
+with its argument is use the selectors <tt>x</tt> and <tt>y</tt>, which are present also in a <tt>Point3</tt>.
+<p>
+As another example we might split the dictionary type into two:
+<pre>
+<b>struct</b> LookupDict a b <b>where</b>
+  lookup :: a -> Request (Maybe b)
+
+<b>struct</b> Dictionary a b < LookupDict a b <b>where</b>
+  insert :: a -> b -> Action
+</pre>
+<p>
+In a program we may build a dictionary <tt>dict :: Dictionary a b</tt> and then send it to an unprivileged client typed as a
+<tt>LookupDict</tt>; the client can then only lookup information, not insert new key/info pairs.
+<p>
+A struct type may have several supertypes; given a struct type
+<pre>
+<b>struct</b> Object <b>where</b>
+  self :: OID
+</pre>
+where <tt>OID</tt> is a type that allows test for equality between objects, we could have defined
+<pre>
+<b>struct</b> Dictionary a b < LookupDict a b, Object <b>where</b>
+  insert :: a -> b -> Action
+</pre>
+<p>
+to get the same effect as before and, in addition, the possibility to test whether two dictionaries are the same (meaning same object,
+not equivalent content).
+<h4>Subtyping for data types</h4>
+<p>
+We can also define hierarchies of data types, but these are completely separate from any hierarchy of struct types; a data type
+can never be a sub- or supertype of a struct type. For data types we may add new constructors to get a supertype:
+<pre>
+<b>data</b> CEntry > Entry = Corrupt
+</pre>
+<p>
+Type <tt>CEntry</tt> adds another constructor to the type <tt>Entry</tt> defined above; a <tt>CEntry</tt> is either a proper
+entry as above or <tt>Corrupt</tt>. A function that is defined to take a <tt>Entry</tt> as argument cannot accept a <tt>CEntry</tt>;
+it may stumble on a <tt>Corrupt</tt> entry. The converse is OK; newly defined functions on <tt>CEntry</tt> values can happily
+take an <tt>Entry</tt>; they will not have to use their <tt>Corrupt</tt> case.
+
+<h4>Subtyping among primitive types</h4>
+<p>
+The following subtyping relations hold between primitive types:<p>
+<pre>
+Request a < Cmd s a
+Action < Cmd s Msg
+Ref a < OID
+</pre>
+<script type="text/javascript"> var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www."); document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E")); </script> <script type="text/javascript"> try { var pageTracker = _gat._getTracker("UA-5102454-2"); pageTracker._trackPageview(); } catch(err) {}</script>
+</body> </html>

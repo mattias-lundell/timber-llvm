@@ -1,0 +1,94 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">
+<html> <head>
+<link href="simplestyle.css" rel="stylesheet" type="text/css">
+<title>Echo</title>
+</head>
+
+<body>
+<h3>Echo</h3>
+
+<p>
+Our first example runs in a very simple setting: a computing environment
+where the interaction between the external world and the program is through a keyboard and a text screen.
+The user provides input using the keyboard and the program prints
+output on the screen.
+<p>
+We consider a reactive program, where the user 
+input is just echoed on the screen, line by line,
+by the program. This trivial interaction, the "Hello, world" of
+reactive programs, goes on indefinitely.
+<p>
+Here is the program:
+<hr>
+<pre>
+<b>module</b> Echo <b>where</b>
+
+<b>import</b> POSIX
+
+root env = <b>class</b>
+
+   echo str = <b>action</b>
+      env.stdout.write str
+
+   <b>result</b> 
+      <b>action</b> 
+         env.stdin.installR echo
+</pre>
+<hr>
+<p>
+Let us explain the program:
+<ul>
+  <li> The first line just states the name of the module.</li>
+  <li> Line 3 contains an import declaration; we will use resources from
+<tt>POSIX</tt>,  a predefined library module that provides the types
+  needed to build programs for simple environment we described above.
+  <p>
+Module <tt>POSIX</tt> defines a struct type <tt>Env</tt>, with selectors
+corresponding to the resources available to the program in its interaction
+with the environment.
+Among these are <tt>stdin</tt>, which refers to the keyboard,
+and <tt>stdout</tt>, which refers to the screen.</li>
+<li>
+Module <tt>POSIX</tt> also acts as the default
+<em>target environment</em> for Timber programs.
+This target environment prescribes that a program
+must contain a <em>root definition</em>
+  <pre>
+root :: Env -> Class Action
+</pre>
+<p>
+
+In module <tt>Echo</tt>, this definition starts on line 5 and
+makes up the rest of the program.
+<p>
+<tt>root</tt> must describe the initial behaviour of the program in its
+<tt>result</tt> action, which terminates the class definition.
+<p>
+In addition, it may make auxiliary definitions; here of
+the function <tt>echo</tt>, which describes how the program
+reacts to an input string <tt>str</tt>.
+The resulting action just installs this function as
+a callback with <tt>env.stdin</tt>.
+</ul>
+<p> When executed, the runtime system invokes the
+result action of the root definition (see
+<a href="Echo2_descr.html"><tt>Echo2</tt></a> for a more careful description.)
+After that, the program is idle, waiting for user input.
+When such (line-buffered) input occurs, the runtime system
+invokes the callback with the input line as argument.
+<p>
+This trivial program is typical for the Timber programming idiom;
+we describe how the program should react to external events and
+install, or register, this description with the external device.
+<p>
+We note, finally, that the use of <tt>stdout</tt> and
+<tt>stdin</tt> is consistent with their types as
+specified in <tt>Env</tt>:
+<ul>
+  <li> <tt>stdout</tt>
+is a <tt>WFile</tt> and thus has a <tt>write</tt> method;
+  <li> <tt>stdin</tt> is a <tt>RFile</tt>, and thus has an
+<tt>installR</tt> method.
+  </ul>
+<script type="text/javascript"> var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www."); document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E")); </script> <script type="text/javascript"> try { var pageTracker = _gat._getTracker("UA-5102454-2"); pageTracker._trackPageview(); } catch(err) {}</script>
+</body> </html>

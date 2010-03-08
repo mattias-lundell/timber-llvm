@@ -1,0 +1,72 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">
+<html> <head>
+<title>Network programming</title>
+<link href="simplestyle.css" rel="stylesheet" type="text/css">
+</head>
+
+<body>
+<h3>Network programming</h3>
+<p>
+The POSIX environment provides basic support for network programming
+over TCP sockets. We repeat part of module <tt>POSIX</tt>:
+<pre>
+<b>module</b> POSIX <b>where</b>
+
+...
+
+<b>data</b> Host = Host String
+<b>data</b> Port = Port Int
+
+<b>struct</b> Internet <b>where</b>
+    tcp :: Sockets
+
+<b>struct</b> Socket < Closable <b>where</b>
+    remoteHost :: Host
+    remotePort :: Port
+    inFile     :: RFile
+    outFile    :: WFile
+
+<b>struct</b> Connection < Closable <b>where</b> 
+    established :: Action
+    neterror    :: String -> Action
+
+<b>struct</b> Sockets <b>where</b>
+   connect :: Host -> Port ->
+              (Socket -> Class Connection) -> Request()
+   listen  :: Port ->
+              (Socket -> Class Connection) -> Request Closable
+
+<b>instance</b> showHost :: Show Host
+showHost = <b>struct</b>
+   show (Host nm) = nm
+</pre>
+<p>
+Typically, a network program consists of two program parts, a <em>client</em>
+and a <em>server</em>, executing on different hosts, connected to
+the internet. The parts communicate over a <em>socket</em>, an
+abstraction of a communication channel. A socket has selectors to give
+the host and port of the remote peer and two files, an <tt>RFile</tt>
+for reading and a <tt>WFile</tt> for writing. The main body of both the
+server and the client is a function of type <tt>Socket -> Class Connection</tt>.
+This function has access to a socket and must define methods
+describing how to handle the events a network program must react to:
+ an <tt>established</tt> message when the cnnection has been established, a
+<tt>neterror</tt> message in case of problems and a <tt>close</tt>
+message from the remote peer.
+<p>
+The client tries to <tt>connect</tt> to a server by specifying a
+host and a port; the server just specifies a port on which to
+<tt>listen</tt>. Whenever a client connects to a host on a port
+and there is a server listening on that port, a socket is created
+for each party with files set up for communication and an
+<tt>established</tt>
+message is sent to both parties. Typically, code in the body of
+<tt>established</tt> will register callbacks with the
+infiles.
+<p> For examples, see <a
+href="EchoServer_descr.html"><tt>EchoServer</tt></a>
+and <tt>TCPClient</tt>.
+<p> Presently, only TCP sockets are supported. A future release may
+provide support for UDP sockets.
+<script type="text/javascript"> var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www."); document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E")); </script> <script type="text/javascript"> try { var pageTracker = _gat._getTracker("UA-5102454-2"); pageTracker._trackPageview(); } catch(err) {}</script>
+</body> </html>

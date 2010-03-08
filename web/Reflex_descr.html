@@ -1,0 +1,102 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">
+<html> <head>
+<link href="simplestyle.css" rel="stylesheet" type="text/css">
+<title>Reflex</title>
+</head>
+
+<body>
+<h3>Reflex</h3>
+
+<p>
+<tt>Reflex</tt> is a simple reaction time tester.
+Only the Return key is used in interaction with
+the program. When pressing Return for the first time,
+the user is instructed to <tt>Wait...</tt>; after a few seconds,
+the program says <tt>Go!</tt> and the user must
+strike Return again as fast as possible. The elapsed
+time is displayed and the test can be repeated.
+<p>
+Here is the program:
+<hr>
+<pre>
+<b>module</b> Reflex <b>where</b>
+
+<b>import</b> POSIX
+<b>import</b> RandomGenerator
+
+<b>data</b> State = Idle | Waiting Msg | Counting
+
+root env = <b>class</b>
+  
+   print str = env.stdout.write (str ++ "\n")
+
+   tmr = <b>new</b> timer
+   gen = <b>new</b> baseGen (microsecOf env.startTime)
+
+   state := Idle
+  
+   enter _ = <b>action</b>
+      <b>case</b> state <b>of</b>
+        Idle ->         r <- gen.next
+                        waitingTime = sec 2 + millisec (r `mod` 2000)
+                        msg <- <b>after</b> waitingTime <b>action</b>
+                           tmr.reset
+                           print "Go!"
+                           state := Counting 
+                        print "Wait..."
+                        state := Waiting msg
+                 
+        Waiting msg ->  <b>abort</b> msg
+                        print "Cheat!!!"
+                        state := Idle
+
+        Counting ->     t <- tmr.sample
+                        print (format t)
+                        state := Idle
+
+   <b>result</b>
+     <b>action</b>
+       env.stdin.installR enter
+       print "Press return to start"
+
+format t = show (secOf t) ++ '.' : fracs ++ " secs"
+  <b>where</b> n  = microsecOf t `div` 10000
+        fracs = <b>if</b> n<10 <b>then</b> '0':show n <b>else</b> show n 
+</pre>
+<hr>
+<p>
+Comments to the code:
+<ul>
+<li> The program uses a timer object <tt>tmr</tt>, which is
+  an instance of the primitive class <tt>timer</tt>. A timer
+  can be can be <tt>reset</tt> and <tt>sample</tt>d; in
+  the latter case it returns the <tt>Time</tt> elapsed since it was
+  last <tt>reset</tt>.
+  <li> It also makes use of a random number generator to
+  produce a random <tt>waitingTime</tt> between two and four seconds
+  for the <tt>Waiting</tt> state.
+  <li> The program is a simple <tt>State</tt> machine, where
+  state changes are triggered in two ways:
+  <ul>
+    <li> The user strikes Return; the case statement in <tt>enter</tt>
+    describes the corresponding actions and state changes. Note that
+    a strike in the <tt>Waiting </tt> state is a user error;
+    hence the user is accused of cheating.
+    <li> The <tt>Waiting</tt> time has elapsed and
+    the action that was scheduled at the previous keystroke is
+    invoked.
+  </ul>
+  <li> The <tt>Waiting</tt> state carries one more piece of information in the
+  form of a <tt>Msg</tt> tag, created when the Go message was scheduled.
+  If the user cheats, that scheduled action must be <tt>abort</tt>ed; 
+  the message tag is needed as argument to the abort function.
+  <li> The time displayed is formatted with two decimals, using
+  auxiliary function <tt>format</tt>.
+  <li> This program should preferrably be executed in some simpler
+  environment with only a display, one or two buttons and perhaps some
+  sound-making device. The program would have to be modified
+  accordingly to import the proper environment module instead of <tt>POSIX</tt>
+  and to call the methods of that environment.
+</ul>
+<script type="text/javascript"> var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www."); document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E")); </script> <script type="text/javascript"> try { var pageTracker = _gat._getTracker("UA-5102454-2"); pageTracker._trackPageview(); } catch(err) {}</script>
+</body> </html>

@@ -1,0 +1,99 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">
+<html> <head>
+<link href="simplestyle.css" rel="stylesheet" type="text/css">
+<title>PingTimeServers</title>
+</head>
+
+<body>
+<h3>PingTimeServers</h3>
+<p>
+Another network client, that asks a number of network time servers,
+listed on the command line, for current time. Here is a sample
+run:
+<pre>
+examples> ./PingTimeServers time.nist.gov time-a.nist.gov time.ien.it dummy localhost
+dummy: Name lookup error
+localhost: Connection failed
+time-a.nist.gov: 
+54786 08-11-16 16:51:48 00 0 0 254.7 UTC(NIST) * 
+
+time.ien.it: Sun Nov 16 17:51:47 2008
+
+time.nist.gov: no response
+examples> 
+</pre>
+<p> The program connects to servers that use the old Daytime Protocol,
+listening on TCP port 13.   In this protocol, a
+time server will immediately when connection has been
+established send current time and close the connection.
+
+The three first arguments above are existing time servers. Two of
+these responded quickly with time in this run, while
+<tt>time.nist.gov</tt>
+did not respond within two seconds. The fourth argument is a
+nonsense host that the name server will not identify and the final
+argument, <tt>localhost</tt>, is a valid host which will probably not run
+a time server. 
+<p>
+Here is the program:
+<hr>
+<pre>
+<b>module</b> PingTimeServers <b>where</b>
+
+<b>import</b> POSIX
+<b>import</b> Data.Functional.List
+
+port = Port 13  -- standard port for time servers
+
+client neterror report sock = <b>class</b>
+
+    established = <b>action</b>
+       sock.inFile.installR report
+
+    close = <b>request</b> <b>result</b> ()
+
+    <b>result</b> Connection {..}
+ 
+
+root env = <b>class</b>
+
+    args = [1..size env.argv-1] 
+    print i mess = env.stdout.write
+                      (env.argv!i ++ ": "++ mess ++ "\n")
+
+    outstanding := args
+
+    report i mess = <b>action</b>
+       outstanding := delete i outstanding
+       print i mess
+       <b>if</b> (null outstanding) <b>then</b> env.exit 0
+    
+    <b>result</b> <b>action</b>
+       <b>forall</b> i <- args <b>do</b>
+          env.inet.tcp.connect (Host (env.argv!i))
+                               port
+                               (client (report i) (report i))
+       <b>after</b> (sec 2) <b>action</b>
+          <b>forall</b> i <- outstanding <b>do</b> 
+             print i "no response"
+          env.exit 0
+
+</pre>
+<hr>
+<p>
+Comments to the code:
+<ul>
+   <li> The client class used to <tt>connect</tt> is <tt>client</tt>.
+   It takes as argument the action to invoke in case of net error
+  (such as name lookup failure or connection failure) and the
+  action to install as listener when connection is established.
+  <li> These
+  two actions will in fact be the same in this case as seen from
+  the <tt>connect</tt> call. They will print the host name and
+  message to stdout and note that this host has replied by deleting its
+  index from <tt>outstanding</tt>.
+  <li>
+  The root action will make sure that the program does not
+  wait more than two seconds for any host.
+<script type="text/javascript"> var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www."); document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E")); </script> <script type="text/javascript"> try { var pageTracker = _gat._getTracker("UA-5102454-2"); pageTracker._trackPageview(); } catch(err) {}</script>
+</body> </html>

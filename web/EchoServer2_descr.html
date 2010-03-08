@@ -1,0 +1,84 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">
+<html> <head>
+<link href="simplestyle.css" rel="stylesheet" type="text/css">
+<title>EchoServer2</title>
+</head>
+
+<body>
+<h3>EchoServer2</h3>
+<p>
+This is a minor extension of <tt>EchoServer</tt>: when started, it
+expects an integer command line argument <tt>maxClients</tt>, denoting
+the maximal number of concurrently served clients. If more clients
+connect, they are just informed that the server is busy and
+disconnected.
+<hr>
+<pre>
+<b>module</b> EchoServer2 <b>where</b>
+
+<b>import</b> POSIX
+<b>import</b> Counter
+
+port = Port 12345
+
+root env = <b>class</b>
+ 
+    clients = <b>new</b> counter
+
+    log str = <b>action</b>
+       env.stdout.write ('[':str ++ "]\n")
+
+    <b>result</b> <b>action</b>
+       <b>case</b> parse (env.argv ! 1) <b>of</b>
+         Right n -> env.inet.tcp.listen port (server n clients log)
+         _ -> env.stdout.write "usage: EchoServer n, where n is number of concurrent clients\n"
+              env.exit 1
+
+server maxClients clients log sock = <b>class</b>
+
+   n := 1
+
+   p = show sock.remoteHost
+
+   echo str = <b>action</b>
+      sock.outFile.write (show n ++"> "++str)
+      n := n+1
+
+   close = <b>request</b>
+      clients.decr
+      log (p ++ " closing")
+      <b>result</b> ()
+
+   neterror str = log ("Neterror: "++str)
+
+   established = <b>action</b>
+      cl <- clients.value
+      <b>if</b> cl < maxClients <b>then</b>
+         clients.incr
+         log ("Connected from " ++ p)
+         sock.inFile.installR echo
+      <b>else</b>
+         sock.outFile.write "Server busy"
+         log ("Refused " ++ p)
+         sock.close
+
+   <b>result</b> Connection{..}
+</pre>
+<hr>
+The differences to <tt>EchoServer</tt> are the following:
+<p>
+  We need to keep track of the number of served clients.
+  For this we use a <a href="Counter_descr.html"><tt>Counter</tt></a>
+  object, created by the root object.
+  <p> When a new client connects, the counter value is retrieved and
+  only if this value is small enough is an <tt>echo</tt> action installed;
+  otherwise the client is informed that the server is busy and the
+  socket closed.  When a client closes the connection, the counter is decreased.
+  <p>
+  A <tt>Counter</tt> object is appropriate here, since several server objects,
+  each interacting with one client, interacts with it. In
+  contrast, the line number local to each server object is maintained
+  in a simple integer state variable.
+ 
+<script type="text/javascript"> var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www."); document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E")); </script> <script type="text/javascript"> try { var pageTracker = _gat._getTracker("UA-5102454-2"); pageTracker._trackPageview(); } catch(err) {}</script>
+</body> </html>

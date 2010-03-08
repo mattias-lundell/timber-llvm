@@ -1,0 +1,133 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">
+<html> <head>
+<title>The POSIX environment</title>
+<link href="simplestyle.css" rel="stylesheet" type="text/css">
+</head>
+
+<body>
+<h3>The POSIX environment</h3>
+<p>
+Timber is intended to be usable in many different
+situations, ranging from embedded systems to
+standard desktop applications. The interfaces
+between the Timber program and the external environment
+are very different in these cases.
+<p>
+Thus a Timber application must be built for a particular target
+environment. This distribution provides only one environment,
+the POSIX environment. Also this is incomplete and a more complete
+version will be provided in a future release.
+<pre>
+<b>module</b> POSIX <b>where</b>
+    
+<b>type</b> RootType = Env -> Class Prog
+
+<b>type</b> Prog = Action
+
+<b>struct</b> Env <b>where</b>
+    exit      :: Int -> Request ()
+    argv      :: Array String
+    stdin     :: RFile
+    stdout    :: WFile
+    openR     :: String -> Request (Maybe RFile)
+    openW     :: String -> Request (Maybe WFile)
+    startTime :: Time
+    inet      :: Internet
+
+<b>struct</b> Closable <b>where</b>
+    close :: Request ()
+
+<b>struct</b> File < Closable <b>where</b>
+    seek  :: Int -> Request Int
+    
+<b>struct</b> RFile < File <b>where</b>
+    read     :: Request String
+    installR :: (String -> Action) -> Request ()
+    
+<b>struct</b> WFile < File <b>where</b>
+    write    :: String -> Request Int
+    installW :: Action -> Request ()
+
+<b>data</b> Host = Host String
+<b>data</b> Port = Port Int
+
+<b>struct</b> Internet <b>where</b>
+    tcp :: Sockets
+
+<b>struct</b> Socket < Closable <b>where</b>
+    remoteHost :: Host
+    remotePort :: Port
+    inFile     :: RFile
+    outFile    :: WFile
+
+<b>struct</b> Connection < Closable <b>where</b> 
+    established :: Action
+    neterror    :: String -> Action
+
+<b>struct</b> Sockets <b>where</b>
+   connect :: Host -> Port ->
+              (Socket -> Class Connection) -> Request()
+   listen  :: Port ->
+              (Socket -> Class Connection) -> Request Closable
+
+<b>instance</b> showHost :: Show Host
+showHost = <b>struct</b>
+   show (Host nm) = nm
+
+</pre>
+<p>
+The root module of a program targeted for this environment must
+<tt>import POSIX</tt> and contain
+a definition <tt>root :: RootType</tt>.
+<p>
+Here the type <tt>Env</tt> collects the services that the environment
+provides to the program: the program can  call a function <tt>exit</tt>
+to terminate the program with a status indication, access command line arguments
+through <tt>argv</tt>, the standard input and output streams
+as <tt>stdin</tt> and <tt>stdout</tt>, open files for reading and
+writing, etc. Within a definition
+<pre>
+root env = ...
+</pre>
+these services are accessed using dot notation as <tt>env.argv</tt> etc.
+<p>
+The <tt>read</tt> and <tt>write</tt> on files are <em>non-blocking</em> operations:
+<ul>
+  <li><tt>read</tt> returns a string of the bytes that are available
+  in the file at the time of the call. If no input is available, the empty string is returned.
+  Input is line-buffered, so no input is available until the user strikes return.
+  <li> <tt>write</tt> takes a string as argument and tries to write it to the file;
+  the returned value is the number of characters written; for regular files this should be
+  expected to be the length of the argument.
+</ul>
+<p>
+Because of the non-blocking nature of input and output, programs need a way to be notified
+when input is available or output is possible. This is the role of <em>listeners</em>
+or <em>callbacks</em>; a call
+<p>
+<pre>
+env.stdin.installR inpHandler
+</pre>
+<p>
+installs the action <tt>inpHandler</tt> as a listener on <tt>stdin</tt>; whenever input
+is available (i.e. the user strikes return), the runtime system calls the listener with
+the input line as argument.
+<p>
+The <tt>startTime</tt> denotes a <tt>Time</tt> value, representing the time elapsed since
+the Epoch.  One main use of this value is that its least significant part can
+serve as random generator seed.
+<p>The <ttEnv</tt> selector <tt>inet</tt> provides support for network programming, described on
+a <a href="inet.html">separate page</a>.
+<p>
+Execution of a program proceeds as follows. The runtime system is responsible
+for initialization: it creates
+an environment object with interface <tt>env :: Env</tt>, applies <tt>root</tt> to <tt>env</tt> and
+creates an object of the resulting class; this gives an interface to the initial action of the program.
+The run-time system executes this action; this may
+lead to creation of more objects, scheduling of future actions etc.
+<p>
+After this initial computation the program comes to rest and
+reacts to events, such as scheduled timer events or IO events on files with installed listeners.
+<p>
+<script type="text/javascript"> var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www."); document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E")); </script> <script type="text/javascript"> try { var pageTracker = _gat._getTracker("UA-5102454-2"); pageTracker._trackPageview(); } catch(err) {}</script>
+</body> </html>

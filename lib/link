@@ -1,0 +1,8 @@
+#!/bin/bash
+
+file=$1
+main=$1Main
+
+gcc -DPOSIX   -g -O2 -m32 -pthread -D_GNU_SOURCE=1  -o $main $main.o $file.o -L.  -I/home/capitrane/installed/timber//share/timberc-1.0.3/include  -I/home/capitrane/installed/timber//share/timberc-1.0.3/lib  -I /home/capitrane/installed/timber//share/timberc-1.0.3/rtsPOSIX  -DROOT=root_$main  -DROOTINIT=_init_$main /home/capitrane/installed/timber//share/timberc-1.0.3/rtsPOSIX/main.c -lTimber
+
+#gcc -DPOSIX   -g -O2 -m32 -pthread -D_GNU_SOURCE=1  -o $main $main.o $file.o -L/home/capitrane/installed/timber//share/timberc-1.0.3/rtsPOSIX  -I/home/capitrane/installed/timber//share/timberc-1.0.3/include  -I/home/capitrane/installed/timber//share/timberc-1.0.3/lib  -I /home/capitrane/installed/timber//share/timberc-1.0.3/rtsPOSIX  -DROOT=root_$main  -DROOTINIT=_init_$main /home/capitrane/installed/timber//share/timberc-1.0.3/rtsPOSIX/main.c -lTimber

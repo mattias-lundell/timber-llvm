@@ -1,0 +1,215 @@
+%!PS-Adobe-2.0 EPSF-2.0
+
+%%BoundingBox: 0 0 173 78
+
+% Timber logo
+
+% To get another color as background (exterior to the clock):
+% Uncomment lines 30-41 and edit line 30 (0 0 0 gives black, 1 0 0 red, 0 1 0 green etc).
+
+% To get the timber-lang.org URL in the lower right corner:
+% Uncomment lines 124-131.
+
+/wood {
+
+    dup 20 sub 0.5 mul setlinewidth
+    
+    dup 5 ge
+    {20 sub dup mul 500 div 1 exch sub}
+    {0.1 mul 0.4 add} ifelse
+
+    dup dup 0.8 mul exch 0.5 mul setrgbcolor
+} def
+
+2 setlinecap
+gsave
+
+%% Painting the background (exterior to the clock)
+%
+%0 0 0 setrgbcolor
+%30 65 moveto currentpoint translate
+%2.23 1 scale
+%-63 0 moveto
+%0 0 63 180 90 arc
+%100 63 lineto
+%100 -100 lineto
+%-63 -100 lineto
+%closepath fill
+%
+%grestore
+%gsave
+
+% Shading of clock
+
+30 65 moveto currentpoint translate
+2.23 1 scale
+0 0 63 0 360 arc
+clip
+
+<<
+    /ShadingType 3
+    /ColorSpace /DeviceRGB
+    /Coords [0 0 0 0 0 63]
+    /Domain [0 1]
+    /Function
+    <<
+	/FunctionType 2
+	/Domain [0 1]
+	/C0 [1 1 1]
+	/C1 [0.6 0.65 1]
+	/N 4
+    >>
+>>
+
+shfill    
+grestore
+gsave
+
+% Clock radii and circumference
+
+30 65 moveto currentpoint translate
+0.5 setgray
+1 setlinewidth
+2.23 1 scale
+0 1 11 {
+    0 0 moveto
+    30 mul 0 0 63 4 3 roll dup 30 add arc
+} for
+stroke
+
+grestore
+gsave
+
+% Grey border in left/top border 
+
+0.4 setlinewidth
+0.5 setgray
+0.2 3.5 moveto 0.2 77.8 lineto 166.3 77.8 lineto stroke
+
+% Arrows
+
+30 65 moveto currentpoint translate
+0 1 20 {
+    dup 20 sub 0.5 mul setlinewidth
+    0.04 mul 0.2 add dup dup setrgbcolor
+    
+    0 0 moveto
+    0 -44 lineto 3 -44 lineto 0 -49 lineto -3 -44 lineto 0 -44 lineto
+    stroke
+    
+    0 0 moveto
+    120 0 lineto 120 3 lineto 125 0 lineto 120 -3 lineto 120 0 lineto
+    stroke
+} for
+
+% Arrowhead white centers
+
+0 setlinewidth
+1 setgray
+
+120 0 moveto
+120 3 lineto 125 0 lineto 120 -3 lineto closepath
+fill
+
+0 -44 moveto
+3 -44 lineto 0 -49 lineto -3 -44 lineto closepath
+fill
+
+grestore
+gsave
+
+%% URL in lower right corner
+%
+%0.5 setgray
+%/Courier findfont 
+%6 scalefont setfont
+%103 2 moveto
+%(www.timber-lang.org) show
+%
+%grestore
+%gsave
+
+% Finally, the word TIMBER
+
+% T
+
+0 20 moveto currentpoint translate
+0 1 20 {
+    wood
+    15 45 moveto 45 45 lineto stroke
+    30 15 moveto 30 45 lineto stroke
+} for
+  
+grestore
+
+% Scale to make remaining letters smaller
+
+-5 6 translate
+0.8 0.8 scale
+
+gsave
+
+% I
+
+60 20 moveto currentpoint translate
+0 1 20 {
+    wood
+    0 15 moveto 0 40 lineto stroke
+} for
+  
+grestore
+gsave
+
+% M
+
+75 20 moveto currentpoint translate
+0 1 20 {
+    wood
+    0 15 moveto 0 40 lineto 0.1 40 lineto 10 27 lineto 19.9 40 lineto 20 40 lineto 20 15 lineto stroke
+} for
+  
+grestore
+gsave
+
+% B
+
+110 20 moveto currentpoint translate
+0 1 20 {
+    wood
+    0 15 moveto 0 40 lineto 8 40 lineto
+    8 34 6 90 270 arcn 0 28 lineto
+    8 28 lineto
+    8 21.5 6.5 90 270 arcn 0 15 lineto 
+    stroke
+} for
+  
+grestore
+gsave
+
+% E
+
+139 20 moveto currentpoint translate
+0 1 20 {
+    wood
+    13 15 moveto 0 15 lineto 0 40 lineto 
+    13 40 lineto
+    0 28 moveto 12 28 lineto
+    stroke
+} for
+  
+grestore
+gsave
+
+% R
+
+167 20 moveto currentpoint translate
+0 1 20 {
+    wood
+    0 15 moveto 0 40 lineto 8 40 lineto
+    8 33.5 6.5 90 270 arcn 0 27 lineto
+    8 27 lineto
+    15 16 lineto
+    stroke
+} for
+  
+showpage

@@ -1,0 +1,139 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">
+<html> <head>
+<link href="simplestyle.css" rel="stylesheet" type="text/css">
+<title>Type classes and qualified types</title>
+</head>
+
+<body>
+
+<h3>Type classes and qualified types</h3>
+<p>
+In mathematics and in most programming languages, <tt>+</tt> and <tt>-</tt> denote addition and subtraction; but what should
+their types be? Of course, we want to be able to add both integers and floating-point numbers, but these two functions correspond to
+completely different machine operations; we may also want to define arithmetic on new types, such as complex or rational numbers.
+<p>
+To better understand the problem, consider a function to add the elements of a list of integers to an accumulator.
+Assuming that <tt>+</tt> only means integer addition we could define
+<pre>
+add :: Int -> [Int] -> Int
+add acc (x : xs) = add (x + acc) xs
+add acc [] = acc
+</pre>
+<p>
+As long as there are elements in the list, we add them to the accumulator and call the function recursively; when the list is empty the
+accumulator holds the result.
+<p> But this function makes perfect sense also for floats (or rationals, or complex numbers, or ...) and we would like to use it at
+those types, too. One could imagine an ad hoc solution just for the arithmetic operators, but we prefer a general solution.
+<p>
+A first step is to introduce the following struct type:
+<pre>
+<b>struct</b> Num a <b>where</b>
+  (+), (-), (*) :: a -> a -> a
+</pre>
+<p>
+A value of type <tt>Num Int</tt> has three fields, defining addition,
+subtraction and multiplication, respectively, on integers. (Of course, we can construct an object of this type using any three functions
+of the prescribed type, but the intention is to supply the standard arithmetic operators.) Similarly, a value of type <tt>Num Float</tt>
+defines the corresponding operators for floating-point numbers.
+<p>
+Assume that we have
+properly defined struct value <tt>numInt :: Num Int</tt>. We can then define 
+<pre>
+add :: Int -> [Int] -> Int
+add acc (x : xs) = add (numInt.(+) x acc) xs
+add acc [] = acc
+</pre>
+<p>
+Of course, the first argument in the recursive call now looks horrible; it would be silly to write integer addition in this way. 
+But it has now become easy to generalize the code by abstracting out the <tt>Num</tt> object as an argument:
+<pre>
+add :: Num a -> a -> [a] -> a
+add d acc (x : xs) = add d (d.(+) x acc) xs
+add d acc [] = acc
+</pre>
+<p>
+This version of <tt>add</tt> can be used for lists of any type of objects for which we can define the arithmetic operators, at 
+the expense of passing an extra argument to the function.
+<p>
+The final step that gives an acceptable solution is to <em>let the compiler</em> handle the <tt>Num</tt> objects. We do this by declaring
+<tt>Num</tt> to be a  <em>type class</em>, loosely following the terminology introduced in Haskell:
+<pre>
+<b>typeclass</b> Num
+</pre>
+<p>
+For any such type, its selectors can be used <em>without</em> the
+dot notation identifying a struct value from which to select. Whenever a selector of a type class occurs in a function
+body, the compiler does the following:
+<ul>
+<li> adds an extra parameter of the type class to the function;</li>
+<li> changes the selector occurrences in the function body to a selection from that parameter.</li>
+<li> wherever the function is used, adds an object of the proper type as an extra argument.
+<li> changes the type of the function to be a <em>qualified type</em>; the type class occurs as a constraint after <tt>\\</tt>.
+</ul>
+<p>
+With <tt>Num</tt> defined as a type class, our running example becomes
+<pre>
+add :: a -> [a] -> a \\ Num a
+add acc (x : xs) = add (x + acc) xs
+add acc [] = acc
+</pre>
+<p>
+As a convenience, the declaration of the struct type and the type class declaration can be combined into one single declaration:
+<pre>
+<b>typeclass</b> Num a <b>where</b>
+  (+), (-), (*) :: a -> a -> a
+</pre>
+<p>
+To use function <tt>add</tt> to sum a list of integers, we would like to write e.g. <tt>add 0 [1, 7, 4]</tt>. The compiler must now insert
+the extra argument <tt>numInt</tt>, a struct value with selectors for the three arithmetic operators at type <tt>Int</tt>.
+However, since there might be several objects of type <tt>Num Int</tt> defined, we must indicate in  <tt><b>instance</b></tt> declarations
+the objects that are to be used at different types.
+<pre>
+<b>instance</b> numInt :: Num Int
+</pre>
+An instance declaration is essentially just a type signature flagged with the additional information that the corresponding value 
+is available for automatic argument insertion by the compiler.
+For convenience, an instance declaration and its struct value definition can also be combined 
+into one declaration. As an example, here is an instance of <tt>Num</tt> for rational numbers:
+<pre>
+<b>data</b> Rational = Rat Int Int
+
+<b>instance</b> numRat :: Num Rational <b>where</b>
+  Rat a b + Rat c d = Rat (a*d + b*c) (b*d)
+  Rat a b + Rat c d = Rat (a*d - b*c) (b*d)
+  Rat a b * Rat c d = Rat (a*c) (b*d)
+</pre>
+<p>
+This definition should be improved by reducing the fractions using Euclid's algorithm, but we omit that. We just note that the arithmetic operators in
+the right hand sides are at type <tt>Int</tt>; thus the compiler will insert the proper operations from the instance <tt>numInt</tt>, avoiding
+the overhead of extra parameters.
+<p>
+This solution combines ease of use and flexibility with type security. A possible disadvantage is inefficiency; an extra parameter is passed
+around. To address this, the user may add a specific type signature; if the user assigns the type <tt>Int -> [Int] -> Int</tt> to <tt>add</tt>,
+giving up flexibility, the compiler will not add the extra parameter, instead inserting integer operations directly into the function body.
+<p>
+Several type classes, including <tt>Num</tt>, are defined in the Prelude, together with instances for common cases.
+<p>
+The compiler must be able to select the proper object of a type class to use whenever a function with a qualified type is used; this choice
+is guided by the context of the function application. In certain cases ambiguites can occur; these are resolved using default declarations.
+<p>
+Normally, the combined declaration forms are used both for type classes and instances. Separate typeclass declaration of a struct type can only
+be done in the module where the struct type is defined.
+<h4>Subtyping constraints</h4>
+<p>
+Also subtyping relations may be used as constraints in qualified types. As a simple example, consider the function
+<pre>
+twice f x = f (f x)
+</pre>
+<p>
+Obviously, <tt>twice</tt> has a polymorphic type. At first, it seems that the type should be
+<pre>
+(a -> a) -> a -> a
+</pre>
+However, it can be assigned the more general type
+<pre>
+twice :: (a -> b) -> a -> b \\ b &lt; a
+</pre>
+Types with subtype constraints will never be assigned by the compiler through type inference, but can be accepted in type-checking.
+<script type="text/javascript"> var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www."); document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E")); </script> <script type="text/javascript"> try { var pageTracker = _gat._getTracker("UA-5102454-2"); pageTracker._trackPageview(); } catch(err) {}</script>
+</body> </html>

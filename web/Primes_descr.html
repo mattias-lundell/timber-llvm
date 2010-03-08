@@ -1,0 +1,91 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">
+<html> <head>
+<link href="simplestyle.css" rel="stylesheet" type="text/css">
+<title>Primes</title>
+</head>
+
+<body>
+<h3>Primes</h3>
+<p>
+As a reactive program, this is quite degenerate: when started, it
+expects
+a positive integer <tt>n</tt>&gt;2 as command line argument. It
+computes all primes smaller than or equal to <tt>n</tt>, prints
+the number of such primes to <tt>stdout</tt> and terminates.
+<p>
+The algorithm used illustrates imperative programming using updatable
+arrays in Timber. Here is the program:
+<hr>
+<pre>
+<b>module</b> Primes <b>where</b>
+
+<b>import</b> POSIX 
+
+root env = <b>class</b>
+   limit :: Int
+   limit = fromRight (parse (env.argv!1))
+   primesBound = limit `div` log3 limit
+
+   primes := uniarray primesBound 0
+   count  := 0
+
+   isPrime k = loop 0
+      <b>where</b> loop n = <b>do</b> 
+              p = primes!n
+              <b>if</b> p*p > k <b>then</b>
+                 <b>result</b> True
+              <b>elsif</b> k `mod` p  == 0 <b>then</b>
+                 <b>result</b> False
+              <b>else</b> loop (n+1)
+
+   checkFrom k = <b>do</b>
+     p <- isPrime k
+     <b>if</b> p <b>then</b> 
+        primes!count := k
+        count := count + 1
+     <b>if</b> k < limit <b>then</b> checkFrom (k+1)
+
+   <b>result</b> <b>action</b>
+     primes!0 := 2
+     count := 1
+     checkFrom 3
+     env.stdout.write (show count++"\n")
+     env.exit 0
+
+
+log3 :: Int -> Int
+log3 n  
+  | n < 3       = 0
+  | otherwise   = 1 + log3 (n `div` 3)
+</pre>
+<hr>
+<ul>
+ <li>
+Prime numbers are stored in array <tt>primes</tt>, which is
+initialised with all zeros (primitive function <tt>uniarray</tt>
+creates an array, whose size is given by the first argument, where
+all elements are initialised to the value of the second argument).
+<li>
+The root action notes that 2 is a prime and initiates <tt>count</tt>
+to 1; it then checks numbers for primeness, starting with 3 in
+procedure <tt>checkFrom</tt>. This check is expressed using
+recursion, checking for successive numbers up to <tt>limit</tt>.
+  </ul>
+  <p>
+  We note also that the correctness of the program depends on two mathematical facts:
+<ul>
+  <li> To limit the size of the array, the program uses the moderately clever bound that the number
+of primes up to <tt>n</tt> is at most <tt>n `div` log3 n</tt>.
+  <li>
+The procedure <tt>isPrime</tt> works by trial division, using already
+discovered primes: to check whether <tt>k</tt> is a prime, one tries
+to find a proper prime factor <tt>p</tt> such that <tt>p*p <= k</tt>. If
+none is found, <tt>k</tt> is prime. Thus it is important, if
+  <tt>k</tt>
+  is actually a prime, that a prime <tt>p</tt> with <tt>p*p > k</tt>
+  exists to terminate the search. By Bertrand's postulate, much more
+  is
+  true: there is a prime with <tt>2*p > k</tt>.
+  </ul>
+<script type="text/javascript"> var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www."); document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E")); </script> <script type="text/javascript"> try { var pageTracker = _gat._getTracker("UA-5102454-2"); pageTracker._trackPageview(); } catch(err) {}</script>
+</body> </html>

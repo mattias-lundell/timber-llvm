@@ -1,0 +1,132 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">
+<html> <head>
+<title>A gentle introduction</title>
+<link href="simplestyle.css" rel="stylesheet" type="text/css">
+</head>
+
+<body>
+<h3>A gentle introduction</h3>
+<p>
+The overall purpose of a Timber program is to <em>react to events</em> sent to it from 
+its execution environment. This process is potentially infinite, and the order of external 
+events is also not generally known in advance.
+<p>
+To capture this intuition, Timber defines its primary run-time structure to be a set of 
+interconnected <em>reactive objects</em>, that each encapsulate a piece of the global 
+program state. A reactive object is a passive entity defined by a set of methods, whose 
+relative execution order is left to be determined by clocks and external events. Between 
+invocations, a Timber object just maintains its state, ready to react when a method call 
+occurs. Like real-world objects, Timber objects evolve in parallel, although the methods 
+belonging to a particular object are always run under mutually exclusion. Concurrency as 
+well as state protection is thus implicit in Timber, and does not require any direct 
+mentioning of threads or other concurrency constructs.
+<p>
+Objects are created by instantiating a <em>class</em>. Methods are either <em>asynchronous</em>
+or <em>synchronous</em>, as denoted by the keywords <strong>action</strong> and 
+<strong>request</strong>, respectively. The most radical property of Timber is that it is 
+free from any indefinitely blocking constructs; because of this, a Timber object is always 
+fully responsive when not actively executing code. This process structure should be 
+contrasted to the common infinite event-loop pattern in other languages, where blocking 
+system calls are used to partition an otherwise linear thread of execution into event-handling 
+fragments.
+<p>
+Each reaction in Timber is furthermore associated with a programmable <em>timing window</em>,
+delimited by upper and lower constraints called the <em>baseline</em> and the <em>deadline</em>
+of a reaction. The semantics of these constraints is formally defined like the rest of the 
+language, and serves the purpose of codifying the legal behavior of a Timber system in a 
+platform-independent manner. The timing window is inherited by each method call by default, 
+but can also be manually set by the programmer; using the constructs <strong>after</strong> for 
+moving a window forward with an offset, and <strong>before</strong> for setting a timing window 
+width. Both values are measured relative to the fixed reference-points of baselines, never 
+from the point in time a method call is actually made. Posting a message to arrive at some 
+specific time into the future is thus easy in Timber, and defining a periodic process amounts 
+to the special case of repeating such a pattern recursively.
+<p>
+The following Timber example shows a simple implementation of a <em>sonar driver</em> that 
+is coupled to an alarm.  The specifications assumed state that a sonar beep should be 2 
+milliseconds long, with a maximum jitter of 50 microseconds, and that the required accuracy 
+of the measurements dictate that time-stamps associated with beeps must also be accurate 
+down to the 50 microsecond range. The figure below illustrates the timing windows 
+constraining the involved methods <tt>ping</tt> and stop, and thus, indirectly, the actual 
+beep produced.
+<p><img src="Beep.png" alt="" width="600" height="200" /></p>
+<p>
+Furthermore, the sonar is supposed to sound every 3 seconds, and the deadline for reacting 
+to off-limit measurements is 5 milliseconds. These specifications look as  follows when 
+translated into Timber code:
+<pre> 
+sonar port alarm critical =
+   <strong>class</strong>
+      tm = <strong>new</strong> timer
+      count := 0
+      ping = <strong>before</strong> (microsec 50) <strong>action</strong>
+                port.write beep_on
+                tm.reset
+                <strong>after</strong> (millisec 2) stop
+                <strong>after</strong> (sec 3) ping
+      stop = <strong>before</strong> (microsec 50) <strong>action</strong>
+                port.write beep_off
+      echo = <strong>before</strong> (millisec 5) <strong>action</strong>
+                diff &lt;- tm.sample
+                <strong>if</strong> critical diff <strong>then</strong>
+                    count := count + 1
+                    alarm count
+      <strong>result</strong> { interrupt = echo, start = ping }
+
+</pre>
+<p>The header <tt>sonar port alarm critical</tt> here defines function <tt>sonar</tt> to take 
+<tt>port</tt> (the port controlling the beeping hardware), <tt>alarm</tt> (the method to call 
+in emergency) and <tt>critical</tt> (a boolean function on time values) as parameters. The 
+shown class construct creates a local <tt>timer</tt> object instance <tt>tm</tt>, initializes 
+a state variable <tt>count</tt> to 0, and furthermore defines the asynchronous methods 
+<tt>ping</tt>, <tt>stop</tt> and <tt>echo</tt>. The resulting interface is a record 
+containing methods named <tt>interrupt</tt> and <tt>start</tt>, which are just exported 
+aliases for the local method names <tt>echo</tt> and <tt>ping</tt>, respectively.
+<p>
+A <tt>timer</tt> object allows the time between the current baseline and the baseline of 
+the last timer reset to be measured. This is utilized in method <tt>echo</tt>, where the 
+time since the last invocation of <tt>ping</tt> (bound to differ from the beep emission by 
+at most 50 microseconds) is sampled and analyzed to determine if an alarm should be sent. 
+When this happens, the provided alarm method is given the accumulated alarm count as an 
+argument. Notice how each <tt>ping</tt> causes two future events to be triggered: one call 
+to <tt>stop</tt> 2 milliseconds from the current baseline, and a recursive invocation of 
+<tt>ping</tt> itself after 3 seconds to keep the periodic sonar activity alive.
+<p>
+As an example of how a sonar object might be instantiated to run on a bare-metal embedded 
+system, here follows an example of the <tt>root</tt> declaration for such a system.
+<pre>root regs = <strong>class</strong>
+    crit d = d < millisec 15
+    a = <strong>new</strong> alarm (regs!com_port_addr)
+    s = <strong>new</strong> sonar (regs!sonar_port_addr) a crit
+    <strong>result</strong> [ s.start, s.interrupt, a.ack ]
+</pre>
+<p>
+On this level, the interface to the software (as seen from the hardware) is the list 
+of interrupt handlers it provides (enclosed in square brackets).  Consequently (from the 
+software perspective), the hardware takes the shape of an array of device registers that 
+can be read or written (with ! being the indexing operator). The parametric class 
+<tt>root</tt> above is thus of a type that can be instantiated and used directly by the 
+run-time system of a typical bare-metal platform, although it should be noted that the 
+exact shape of a root definition can vary between Timber platforms -- under the POSIX 
+environment, for example, the root class returns just a startup procedure, while taking 
+a full-featured operating system interface as an argument.
+<p>
+The semantics of Timber allows a natural implementation in terms of an EDF scheduler, 
+where the asynchronous methods of a program correspond to tasks, objects take the role 
+of shared resources, and all methods (synchronous as well as asynchronous) simply denote 
+code sequences that require exclusive access to the owning object. Timber also relegates 
+management of its garbage-collected heap to idle time, thus facilitating direct 
+application of known schedulability and execution time analysis methods. The implementation 
+technique used furthermore allows both objects and messages to be created in large numbers 
+without incurring any run-time penalty, at the same time as the number of threads behind 
+the scenes (i.e., the number of execution contexts and stacks) can be limited to the 
+maximum preemption depth a system is expected to need.
+<p>
+Additional features of Timber not covered here include a strong static type system 
+supporting subtyping, parametric polymorphism with overloading, and automatic type inference; 
+a rich set of heap-allocated immutable datatypes; first-class citizenship to all values 
+(meaning that methods as well as classes can be sent as arguments and stored inside data 
+structures); and a referentially transparent evaluation semantics in the purely functional
+tradition.
+<script type="text/javascript"> var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www."); document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E")); </script> <script type="text/javascript"> try { var pageTracker = _gat._getTracker("UA-5102454-2"); pageTracker._trackPageview(); } catch(err) {}</script>
+</body> </html>

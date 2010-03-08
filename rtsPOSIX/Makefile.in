@@ -1,0 +1,39 @@
+prefix       = @prefix@
+CC           = @CC@
+CFLAGS       = @CFLAGS@
+INSTALL	     = @INSTALL@
+
+TIMBERC      = @TIMBERC@
+TIMBERLIBS   = Prelude.t $(filter-out Prelude.t,$(notdir $(wildcard ../lib/*.t)))
+OBJS         = $(TIMBERLIBS:.t=.o)
+
+DEST         = libTimber.a
+
+all: 
+	@printf "Run make install to install and build this RTS.\n\n"
+	@printf "Run make $(DEST) to build this RTS in-place.\n"
+	@printf "Notice that building in-place requires the RTS to reside in\n"
+	@printf "an installed timberc tree.\n\n"
+
+
+$(DEST): $(OBJS) rts.o
+	ar rc $(DEST) $(OBJS) rts.o
+
+$(OBJS): %.o: ../lib/%.t ../include/timber.h
+	$(TIMBERC) --target POSIX --api -c $<
+
+rts.o: rts.c cyclic.c gc.c timer.c rts.h ../include/timber.h ../include/timber.c ../include/float.c
+	$(CC) $(CFLAGS) -Wall -O2 -fno-strict-aliasing -g -I../include -I../lib -I. -c rts.c
+
+install: 
+	$(INSTALL) -d $(DESTDIR)$(prefix)/rtsPOSIX
+	$(INSTALL) timberc.cfg $(DESTDIR)$(prefix)/rtsPOSIX
+	$(INSTALL) rts.h $(DESTDIR)$(prefix)/rtsPOSIX
+	$(INSTALL) rts.c $(DESTDIR)$(prefix)/rtsPOSIX
+	$(INSTALL) cyclic.c $(DESTDIR)$(prefix)/rtsPOSIX
+	$(INSTALL) config.h $(DESTDIR)$(prefix)/rtsPOSIX
+	$(INSTALL) gc.c $(DESTDIR)$(prefix)/rtsPOSIX
+	$(INSTALL) timer.c $(DESTDIR)$(prefix)/rtsPOSIX
+	$(INSTALL) main.c $(DESTDIR)$(prefix)/rtsPOSIX
+	$(INSTALL) Makefile $(DESTDIR)$(prefix)/rtsPOSIX
+	cd $(DESTDIR)$(prefix)/rtsPOSIX && make TIMBERC=$(TIMBERC) $(DEST) 

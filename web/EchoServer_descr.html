@@ -1,0 +1,104 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">
+<html> <head>
+<link href="simplestyle.css" rel="stylesheet" type="text/css">
+<title>EchoServer</title>
+</head>
+
+<body>
+<h3>EchoServer</h3>
+<p>
+Now, let's look at a further feature of the <tt>POSIX</tt>
+environment. It also supports writing <em>network programs</em>,
+that communicate over the Internet using <em>sockets</em>.
+A socket can be thought of as a two-way communication channel,
+consisting of both an <tt>RFile</tt> and a <tt>WFile</tt>.
+<p>
+Two network programs, which
+execute on different machines, may connect over
+the network and communicate using a socket.
+Typically, one of the programs will be a <em>server</em>
+and the other a <em>client</em>. Here is a trivial server, the
+<tt>EchoServer</tt>.
+  This server waits indefinitely for clients to connect on port
+  12345. When a client connects, the server starts a session, where
+  client input rows are echoed back to the client, prefixed by a line
+  number. Several clients may be served concurrently and
+  line numbering is independent for each client.
+
+<hr>
+<pre>
+<b>module</b> EchoServer <b>where</b>
+
+<b>import</b> POSIX
+
+port = Port 12345
+
+root env = <b>class</b>
+
+    log str = <b>action</b>
+       env.stdout.write ('[':str ++ "]\n")
+
+    result <b>action</b>
+       env.inet.tcp.listen port (server log)
+
+
+server log sock = <b>class</b>
+
+   n := 1
+
+   p = show sock.remoteHost
+
+   echo str = <b>action</b>
+      sock.outFile.write (show n ++"> "++str)
+      n := n+1
+
+   close = <b>request</b>
+      log (p ++ " closing")
+      <b>result</b> ()
+
+   neterror str = log ("Neterror: "++str)
+
+   established = <b>action</b>
+      log ("Connected from " ++ p)
+      sock.inFile.installR echo
+
+   <b>result</b> Connection{..}
+</pre>
+<hr>
+<p>
+Comments to the code:
+<ul>
+  <li> The result action of the root definition just installs a
+  listening callback in the environment. Such a callback has type
+  <tt>Socket -> Class Connection</tt> where
+  <ul>
+    <li> a <tt>Socket</tt> object has selectors for the resources
+    <em>from</em> the environment
+    needed by the serving object: the <tt>remoteHost</tt> and
+    <tt>remotePort</tt> and the <tt>inFile</tt> and <tt>outFile</tt>
+    parts of the connection.
+    <li> a <tt>Connection</tt> implements the services provided
+    by the server
+    <em>to</em> the environment: an initial action to call when the
+    connection is <tt>established</tt>, an action to call with
+    an error message when a
+    <tt>neterror</tt> occurs and a method to call when the
+    remote client wants to <tt>close</tt> the connection.
+    </ul>
+    <li> The echoing behaviour is achieved by installing,
+    when connection is established, the
+    <tt>echo</tt> method with the <tt>inFile</tt> of the socket.
+    <li> Additionally, the server logs its connections and
+    errors, using the logging method
+    that it gets as parameter (which logs to <tt>stdout</tt>).
+</ul>
+<p>
+In order to let you run the server, we provide a simple client,
+<tt>TCPClient</tt>. We do not list the code here; you may review
+it in <tt>TCPClient.t</tt>. The client accepts a host name and a port
+number as command line arguments and connects to a server on that
+address. When connection is established, the client accepts user input
+lines, sends them to the server and displays replies obtained on the
+screen.
+<script type="text/javascript"> var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www."); document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E")); </script> <script type="text/javascript"> try { var pageTracker = _gat._getTracker("UA-5102454-2"); pageTracker._trackPageview(); } catch(err) {}</script>
+</body> </html>

@@ -1,0 +1,64 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">
+<html> <head>
+<title>Default declarations</title>
+<link href="simplestyle.css" rel="stylesheet" type="text/css">
+</head>
+
+<body>
+<h3>Default declarations</h3>
+<p>
+Default declarations come in two distinct forms. They share the keyword <tt><b>default</b></tt> and they both
+affect instances for type classes, but otherwise they serve quite different purposes.
+<ul>
+  <li> Ordering between instances.<p>
+  For a given type class <tt>T</tt>, several instances are typically defined. It is permitted to define
+  instances at overlapping types, such as e.g. <tt>T [a]</tt> and <tt>T [Int]</tt>, where the latter type
+  is more specific than the former.
+  <p>
+  During type-checking, the compiler
+  needs to insert instances as implicit arguments to functions that use the selectors of <tt>T</tt>. The compiler infers
+  which instance type <tt>T t</tt> that is needed and chooses the most specific instance. However, it may happen that there
+  is no most specific type. The prelude defines <tt>intInt :: IntLiteral Int</tt> and <tt>intFloat :: IntLiteral Float</tt> and similarly for
+  <tt>Show</tt>. Neither of
+  this is more specific than the other. Thus a top-level definition such as
+  <pre>s = show 1
+</pre>
+  leads to problems; should
+  implicit arguments for Int or Float be inserted? There is no reason to prefer one to the other so <tt>s</tt> is
+  considered ill-typed. But the matter can be decided by inserting a default declaration; the prelude declares
+<pre>
+<b>default</b> intInt < intFloat
+</pre>
+which means that the instance <tt>intInt</tt> is to be preferred to <tt>intFloat</tt>. Thus the <tt>Int</tt> instances
+are chosen and <tt>s</tt> is <tt>"1"</tt> rather than <tt>"1.0"</tt>.
+</li>
+<li> Generation of instances.<p>
+A declaration
+<pre>
+<b>default</b> tD :: T D
+</pre>
+where <tt>T</tt> is a type class and <tt>D</tt> is a data type produces automatically an instance following
+the ideas of Hinze's and Peyton Jones' <a href="http://research.microsoft.com/~simonpj/Papers/derive.htm">derivable type classes</a>. The mechanism applies only in some, rather restrictive, situations,
+but these include common cases like the Prelude's <tt>Eq</tt> and <tt>Ord</tt>, for which it is easy but tedious
+to define instances for a new data type.
+<p>
+The method applies only to one-parameter
+type classes, for which the types of all selectors are simple, according to the following inductive definition:
+<ul>
+  <li> monomorphic types are simple.
+  <li> the type parameter of the type class is simple.
+  <li> if <tt>t1</tt>...<tt>tn</tt> are simple, then <tt>(t1,...,tn)</tt> is simple.
+  <li> if <tt>t1</tt> and <tt>t2</tt> are simple, then <tt> t1 -> t2</tt> is simple.
+</ul>
+The mechanism also requires that instances are defined for the unit type <tt>()</tt>, the type <tt>(a,b)</tt> of pairs and
+the primitive type <tt>Either a b</tt>. The default instance builds an auxiliary type <tt>A</tt> using only these three
+type constructors and defines functions in both directions between between <tt>D</tt> and <tt>A</tt>. The default instance
+for <tt>D</tt> makes use of the instance
+for <tt>A</tt> (which is well-defined, since instances exist for <tt>()</tt>, pairs and <tt>Either</tt>).
+<p>
+In addition to the above mechanism, default instances can be defined for type classes <tt>Show</tt> and <tt>Parse</tt> (defined in the Prelude), but as yet only for enumeration types (pending decisions on proper definitions of predefined type classes for
+conversion between values of data types and strings).
+
+
+<script type="text/javascript"> var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www."); document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E")); </script> <script type="text/javascript"> try { var pageTracker = _gat._getTracker("UA-5102454-2"); pageTracker._trackPageview(); } catch(err) {}</script>
+</body> </html>

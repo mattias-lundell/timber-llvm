@@ -1,0 +1,9 @@
+CfgOpts
+      { cCompiler = "gcc -DPOSIX" 
+      , llvmLLVMAS = "llvm-as "
+      , llvmLLC = "llc "
+      , llvmAS = "as "
+      , compileFlags = " @CFLAGS@ "
+      , linkFlags = " @LDFLAGS@ "
+      , linkLibs = " -lTimber "
+      }

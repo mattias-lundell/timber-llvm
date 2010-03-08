@@ -1,0 +1,34 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">
+<html> <head>
+<title>Timber compiler</title>
+<link href="simplestyle.css" rel="stylesheet" type="text/css">
+</head>
+
+<body>
+<h3>Timber compiler</h3>
+<p>
+This page describes briefly the command line options to <tt>timberc</tt>, the Timber compiler.
+Installation is not described.
+<p>
+<tt>timberc</tt> expects a number of options and a number of files to compile. The most
+common uses are the following:
+<ul>
+  <li> <tt>timberc -c Mod1.t Mod2.t ...</tt>
+  <p> The given files are compiled (first to C by the timber
+  compiler, then to object files by the C compiler). No linking takes place. This usage requires that all
+  files on which the given modules depend have already been compiled. This is the typical way to compile
+  new modules during the development of a Timber system. Can be modified to option <tt>-C</tt> to avoid
+  C compilation.
+  <li> <tt>timberc --make Mod</tt>
+  <p> The compiler expects <tt>Mod.t</tt> to be the root module of a system for the default environment (i.e. POSIX).
+  All modules in the system are compiled by <tt>timberc</tt> and <tt>gcc</tt> as needed and in dependency
+  order, followed by linking. The executable is called <tt>Mod</tt>. This option obviates the need of a makefile
+  to rebuild the system after changes in any modules. Can be combined with <tt>--root=name</tt> when the name of
+  the root definition is <tt>name</tt> (rather than the default <tt>root</tt>).
+  <li> <tt>timberc Mod.ti</tt>
+  <p> Displays the API of module <tt>Mod</tt>, i.e. all exported kinds, types, defaults and top-level values with their types,
+  typically in a browser window (installation-dependent).
+</ul>
+<p>
+<script type="text/javascript"> var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www."); document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E")); </script> <script type="text/javascript"> try { var pageTracker = _gat._getTracker("UA-5102454-2"); pageTracker._trackPageview(); } catch(err) {}</script>
+</body> </html>

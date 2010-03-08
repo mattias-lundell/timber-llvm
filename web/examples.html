@@ -1,0 +1,56 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">
+<html> <head>
+<title>Tutorial examples</title>
+<link href="simplestyle.css" rel="stylesheet" type="text/css">
+</head>
+
+<body>
+<h3>Tutorial examples</h3>
+<p>
+This directory contains a number of simple Timber examples.
+In addition to the pages that describe the programs and comment on
+the code, the source files are here and can be compiled and run.
+<p>
+Module <tt>Echo</tt> is stored in file <tt>Echo.t</tt> and is compiled
+and linked by the shell command
+<pre>
+timberc --make=Echo
+</pre>
+which produces an executable file called <tt>Echo</tt> which can be
+run by the command
+<pre>
+./Echo
+</pre>
+<p>
+This is generalized in the expected way to other programs;
+the <tt>--make</tt> option makes sure that all
+(recursively) imported modules are compiled in the proper order
+before linking is done.
+<p>
+Some programs require a command line argument as described in the
+respective page.
+<p> A brief summary of the programs is the following:
+<ul>
+  <li><a href="Echo_descr.html"><tt>Echo</tt></a>. The archetypical reactive program: user input is
+  read line by line and echoed to the screen.
+  <li><a href="Counter_descr.html"><tt>Counter</tt></a>. The quintessential stateful class; its instances
+  maintain an integer value that can be increased and decreased.
+  <li><a href="Echo2_descr.html"><tt>Echo2</tt></a>. Slight extension of <tt>Echo</tt>: the output
+  lines are decorated with line numbers, thus adding state to the
+  root definition.
+  <li><a href="Echo3_descr.html"><tt>Echo3</tt></a>. Another extension: The last input line is
+  repeatedly echoed once per second, showing use of Timber time
+  constructs.
+  <li><a href="EchoServer_descr.html"><tt>EchoServer</tt></a>. Still a variation: Echoing user input
+  over the Internet.
+  <li><a href="EchoServer2_descr.html"><tt>EchoServer2</tt></a>. A variation of the previous: limiting
+  the number of concurrently served clients.
+  <li><a href="Reflex_descr.html"><tt>Reflex</tt></a>. A simple reaction time tester.
+  <li><a href="MasterMind_descr.html"><tt>MasterMind</tt></a>. A bit more complex: The user chooses a
+  secret in MasterMind and the program does the guessing.
+  <li><a href="Primes_descr.html">Primes</a>. A degenerate reactive program: computes and prints the number of
+  primes smaller than a given bound and terminates.
+  <li><a href="PingTimeServers_descr.html">PingTimeServers</a>. Asks a number of network time servers for the current time.
+</ul>  
+<script type="text/javascript"> var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www."); document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E")); </script> <script type="text/javascript"> try { var pageTracker = _gat._getTracker("UA-5102454-2"); pageTracker._trackPageview(); } catch(err) {}</script>
+</body> </html>

@@ -1,0 +1,101 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">
+<html> <head>
+<title>Timber for Java programmers</title>
+<link href="simplestyle.css" rel="stylesheet" type="text/css">
+</head>
+
+<body>
+<h3>Timber for Java programmers</h3>
+<p>
+Timber can be seen as an object-oriented programming language with
+many familiar features, but also some less familiar. This page summarizes
+both similarities and differences.
+<ul>
+<li>
+The Timber compilation unit is a module. Within such a module one
+defines e.g. types, functions and classes. So there are many other
+entities in Timber than classes and objects.
+<li> The correspondence to a Java <tt>interface</tt> is a Timber
+  struct type. Here is an interface suitable for a simple counter object:
+  <pre>
+<b>struct</b> Counter <b>where</b>
+  incr  :: Action
+  reset :: Action
+  read  :: Request Int
+</pre>
+  <p>
+A class that implements this interface provides two actions
+  (asynchronous methods, that do not return results): <tt>incr</tt>
+  to increment the local integer state by one, and <tt>reset</tt> to
+  reset the state to zero. To query the state, we use the request
+  (synchronous, value-returning method) <tt>read</tt>, which simply returns
+  the value of the state.
+<li>
+ A Timber class consists of
+  <ul>
+    <li> Declaration and initialization of local state variables;
+    <li> Declarations of methods, i.e. actions and requests, that
+    access and update the state.
+    <li> Possibly local, auxiliary, definitions.
+    <li> Specification of a result, which typically is one or more
+    interfaces that the class implements.
+  </ul>
+Here is a counter class:
+ <pre>
+counter initVal = <b>class</b>
+                    val := initVal
+
+                    incr = <b>action</b>
+                             val := val + 1
+
+                    reset = <b>action</b>
+                             val := 0
+
+                    read = <b>request</b>
+                             <b>result</b> val
+
+                    <b>result</b> Counter {..}
+</pre>
+ <p>
+  The class itself starts with the keyword <tt><b>class</b></tt>. We see
+  the initialization of the state variable <tt>val</tt> to <tt>initVal</tt>,
+  the three method declaration and finally the result specification;
+  here <tt>Counter {..}</tt> means: assemble a value of type <tt>Counter</tt>
+  from definitions in scope.
+  <p>
+  Note that there is no constructor method within the class. Within
+  the methods of another class we may write
+  <pre>
+  c1 = <b>new</b> counter 0
+  c2 = <b>new</b> counter 10
+  </pre>
+  to create two counter objects, with initial value 0 and 10, respectively.
+  <li> Timber has parametric polymorphism, so the kind of generics
+  introduced in Java 1.5 is naturally supported.
+<li> Timber provides powerful ways to define new
+  value-oriented data types and functions on these, without attempts to
+  force this into an (often ill-suited) object paradigm. A consequence is
+  that Timber classes have no static variables or methods; such entities
+  are naturally defined as values and functions outside classes.
+<li>
+ All types in Timber are first-class, which makes it possible to use classes
+  and methods as parameters to functions, as function values, as elements in
+  data structures etc leading to new programming patterns. <tt>counter</tt> above
+  is a simple example of this: it has type
+  <pre>
+counter :: Int -> Class Counter
+</pre>
+  i.e., it is a function that when applied to a integer (the start value) returns a
+  class, from which we later can create objects.
+  <li> Timber has subtyping between struct types and inclusion polymorphism
+  but does not support inheritance. Since classes and methods are first-class types
+  in Timber it is often possible to find other ways to express most useful occurrences of
+  inheritance.
+  <li>
+  Methods always execute with exclusive access to the state of objects; thus
+  they can execute concurrently, leading to a very simple concurrency model for
+  Timber.
+  
+</ul>
+<script type="text/javascript"> var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www."); document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E")); </script> <script type="text/javascript"> try { var pageTracker = _gat._getTracker("UA-5102454-2"); pageTracker._trackPageview(); } catch(err) {}</script>
+</body> </html>

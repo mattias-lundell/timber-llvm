@@ -1,0 +1,93 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">
+<html> <head>
+<title>Programs and modules</title>
+<link href="simplestyle.css" rel="stylesheet" type="text/css">
+</head>
+
+<body>
+<h3>Programs</h3>
+<p>
+A Timber program consists of a collection of <em>modules</em>. One of these is the <em>root</em> module and contains the <em>root
+definition</em>. The root definition must have a prescribed <em>root type</em>, that may depend on the <em>target environment</em>.
+A Timber installation may support several target environments/platforms.
+<p>
+The other modules in the program provide auxiliary definitions, used by the root module and by other auxiliary modules.
+The compilation unit in Timber is the module, so modules may be compiled individually (but see below for dependencies).
+
+<h3>Modules</h3>
+
+The syntax of a Timber module is
+<p>
+<tt><b>module</b></tt> <em>moduleName</em> <tt><b>where</b></tt><br><br>
+&nbsp;&nbsp;&nbsp;<em>importDeclaration</em><font color=red>*</font><br><br>
+&nbsp;&nbsp;&nbsp;<em>topLevelDeclaration</em><font color=red>*</font><br><br>
+<tt><b>private</b></tt><br><br>
+&nbsp;&nbsp;&nbsp;<em>topLevelDeclaration</em><font color=red>*</font><br><br>
+
+<p>
+Here, as in many places of Timber syntax, indentation is significant. The import and top-level declarations must be indented at
+least one step and be vertically aligned, i.e., the first character of each declaration must be in the same column.
+An exception is the (common) case where there is no private part; then indentation can be omitted (and all declarations start in the
+leftmost column).
+<h4>Module names</h4>
+<p>
+A module has a simple name, which is an identifier starting with an
+upper-case letter. Modules are conventionally stored in files of the same name with suffix <tt>.t</tt>, i.e.
+module <tt>Dictionary</tt> is stored in <tt>Dictionary.t</tt>.
+<p>
+Projects and Timber sites may use hierarchical module names to allow multiple modules with the same name
+or to indicate structure e.g. in a library. Thus, module <tt>Dictionary</tt> may need to be referred to by
+clients as e.g. <tt>Data.Object.Dictionary</tt>; it is up to the implementation whether this module is
+stored in <tt>Data.Object.Dictionary.t</tt> or in <tt>Data/Object/Dictionary.t</tt>
+relative to some installation-dependent notion of search paths. Module hierarchies in Timber have no other significance
+than to support organizing and subsequently finding modules in a file system.
+<p>
+The module name is given in the header, as described above. 
+</pre>
+<h4>Dependencies</h4>
+<p>
+A module may depend on other modules, i.e. use types or values defined in these modules. In a Timber program
+the dependency graph between modules must be acyclic; no recursive dependencies are allowed. This means that
+modules can be compiled in dependency order: when a certain module is compiled, all the modules it depends on have already
+been compiled. A compiler option can make the compiler decide on recompilation order after a system has been changed.
+
+<h4>Import and use of other modules</h4>
+<p>
+Following the header is a sequence of import/use declarations, i.e. declaration of the modules that the current module depends on.
+There are two forms of such declarations:
+<ul>
+  <li> <em>Import declarations</em>, exemplified by<br>
+  <tt><b>import</b> Data.Objects.Dictionary</tt></li>
+  <li> <em>Use declarations</em>, as in<br>
+  <tt><b>use</b> Data.Objects.Dictionary</tt></li>
+</ul>
+<p>
+Both forms of declaration give access to all exported entities from the named module; the difference is that in the latter case
+one must use the qualified name of an imported entity, while in the former case the simple (unqualified) name is enough, unless name
+clashes occur.
+<p>
+Name clashes are handled as follows:
+<ul>
+  <li> Within a module, name clashes are forbidden in the sense that one cannot define two top-level
+  entities within the same namespace and with the same name. Thus the exported names from a module cannot clash.</li>
+  <li> Fully qualified names are supposed to never clash, i.e., a Timber installation is supposed to be set up so
+  that fully qualified module names are globally unique. Thus <tt>use</tt> of a module can never lead to name clashes
+  and clashes on <tt>import</tt> can be resolved by resorting to qualified names.</li>
+  <li> If a module imports two entities with the same simple name from two different modules, this simple name is not in
+  scope in the importing module; the qualified names must be used. The Timber compiler emits a warning when such situations
+  occur.</li>
+  <li> If a module imports an entity with the same simple name as a locally defined top-level entity, the local definition
+  shadows the import, i.e. the simple name is in scope and refers to the locally defined entity.</li>
+  </ul>
+<h4>Exports</h4>
+<p>
+  All the entities (types, defaults and values) defined in the sequence of public top-level declarations are exported, i.e. can
+  be referred to by importing/using modules. Entities defined in the private part are not exported and hence not visible to importing/using
+  modules. In particular, this means that the type environment of the public part must be closed, i.e. the type of an exported value
+  must not mention a type defined in the private part. Imported entities are re-exported, i.e.the import relation is transitive:
+  if module C imports B, which imports A, the entities in A are visible in C, even if C does not explicitly import A. If the
+  only chain from module C to module A passes a "use" declaration, though, entities defined in A must be referred to in C by their qualified
+  names.
+
+<script type="text/javascript"> var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www."); document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E")); </script> <script type="text/javascript"> try { var pageTracker = _gat._getTracker("UA-5102454-2"); pageTracker._trackPageview(); } catch(err) {}</script>
+</body> </html>

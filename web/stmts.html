@@ -1,0 +1,134 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">
+<html> <head>
+<title>Statements</title>
+<link href="simplestyle.css" rel="stylesheet" type="text/css">
+</head>
+
+<body>
+<h3>Statements</h3>
+<p>
+Statements form the bodies of classes. Within the sequence of statements forming a class definition, there may (and indeed, typically
+will) also occur definitions of actions and requests, which themselves have statement sequences as their bodies.
+<p>
+Statements will typically have side-effects, affecting the state of objects or the external world. This implies that the order of
+statements within a sequence is important. 
+<p>
+Expressions within a statement sequence may furthermore refer to the state variables of the enclosing object.  The values thus obtained
+are the current state values at the time of executing each statement.  In particular, a function referencing to a state variable in 
+its body is referring to the value of that variable at the point of function definition, not the possible values the variable might 
+have when the function is called.
+<p>
+The available statement forms are:
+<ul>
+<li>
+State variable initialization<p>
+<pre>
+<em>svar</em> := <em>expr</em>
+</pre>
+<p>
+Here <em>svar</em> is a state variable. These have the same syntax as ordinary variables and share namespace, but
+there are no rules for shadowing, so a state variable must be distinct from all ordinary variables in scope (and from other,
+already defined state variables in scope). The variable
+being defined may not occur in the right hand side. Initialization implicitly declares this variable as part of the state of objects
+instantiated from this class.
+<li>
+List of bindings.
+<p> These have the same syntax as binding lists in general; adjacent bindings are mutually recursive and
+the bound variables scope over the rest of the statement sequence.
+<p> In addition, bindings in a statement sequence can be of the special form
+<pre>
+<em>pat</em> = <b>new</b> <em>expr</em>
+</pre>
+which is the syntax used for instatiating objects from a class.
+Here <em>expr</em> must evaluate to a class; the effect is that a new object is created, its state initialized and its
+interface is matched against to <em>pat</em>
+<li> The result statement.<p>
+<pre>
+<b>result</b> <em>expr</em>
+</pre>
+In the sequence of statements of a class, this must be the last statement. It defines the interface of the class; i.e., how
+the creator of an object may interact with it.
+<p> Within an action or a request, the result statement thod and the value returned (for
+requests; for actions the result is <tt>()</tt>, the dummy value of type <tt>()</tt>).
+</ul>
+<p>
+The forms of statements up to now are the only forms that may occur in the statement sequence of a class;
+creating an object
+may only involve initiating the state, creating other objects and returning the proper interface. The remaining forms
+occur only within methods and procedures.
+<ul>
+<li>
+State update.<p>
+<pre>
+<em>svar</em> <font color=red>(</font>! <em>expr</em> <font color=red>)*</font> := <em>expr</em>
+</pre>
+The left hand side is here either a state variable or an array L-value (when the <em>svar</em> is an array). Array indexing
+is denoted by the <tt>!</tt> operator; several indexing operations may occur for multidimensional arrays. The right hand side may
+mention this and other state variables.</li>
+<li>
+Request/procedure call.
+<p>
+<pre>
+<em>pat</em> <- <em>expr</em>
+</pre>
+Here the right hand side must evaluate to a request or procedure; the statement expresses a call of this method and matching
+the pattern against the returned value.
+<p>
+The alternative form<p>
+<pre>
+<em>expr</em>
+</pre>
+may also denote a request or procedure call where the binding is omitted or an action call (which does not return  a value).
+<p>
+<a href="expr.html#after">After/before expressions</a> are often used as statements in this way.
+<li>
+Conditional statement.
+<p>
+<pre>
+<b>if</b> <em>expr</em> <b>then</b>
+  <em>stmts</em>
+<b>elsif</b> <em>expr</em> <b>then</b>
+  <em>stmts</em>
+<b>else</b>
+  <em>stmts</em>
+</pre>
+<p>
+The <tt><b>elsif</b></tt> may occur zero or more times; the <tt><b>else</b></tt> part zero or one time.
+<li>
+Case statement.<p>
+<pre>
+<b>case</b> <em>expr</em> <b>of</b>
+  <font color=red>(</font><em>pat</em> -> <em>stmts</em><font color=red>)+</font>
+</pre>
+The alternatives may use guards and/or where clauses just as in function bindings.
+<li> Forall statement.
+<p>
+<pre>
+<b>forall</b> <font color= red>(</font><em>qual</em><font color= red>)+</font> <b>do</b>
+  <em>stmts</em>
+</pre>
+Here the simplest form of <em>qual</em> is <tt><em>var</em> <- <em>expr</em></tt>, where <em>expr</em> evaluates
+to a list. The statement sequence in the body will be executed once for each element of the list, with <em>var</em> bound to
+that element.  Note especially that if an expression in <em>qual</em> references a state variable, the value thus obtained
+will be the state variable value at the beginning of the loop, not any new state that might result after executing the
+enclosed statement sequence.
+</ul>  
+We finish with a simple example.
+<pre>
+<b>struct</b> Counter <b>where</b>
+  inc   :: Action
+  read  :: Request Int
+  reset :: Action
+
+counter = <b>class</b>
+  s := 0
+  inc = <b>action</b>
+    s := s+1
+  read = <b>request</b>
+    result s
+  reset = <b>action</b>
+    s := 0
+  <b>result</b> Counter {..}
+</pre>
+<script type="text/javascript"> var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www."); document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E")); </script> <script type="text/javascript"> try { var pageTracker = _gat._getTracker("UA-5102454-2"); pageTracker._trackPageview(); } catch(err) {}</script>
+</body> </html>

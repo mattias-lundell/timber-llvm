@@ -1,0 +1,333 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">
+<html> <head>
+<title>Expressions and patterns</title>
+<link href="simplestyle.css" rel="stylesheet" type="text/css">
+</head>
+
+<body>
+<h3>Expressions</h3>
+<p>
+Timber has a rich expression language and we divide
+the description in three parts:
+<ul>
+  <li> Basic forms of expressions.
+  <p>Here we describe the Timber form of expression forms that have counterparts in most functional languages.
+  <li> Classes, actions and requests.
+  <p>These forms are special to Timber and provide the building blocks for
+  object-oriented programming.
+  <li> Further forms of expression.
+  <p>Every Timber program will include expressions from the previous two groups. In this
+  third group we describe more esoteric forms that may be ignored by the beginning Timber programmer.
+</ul> 
+
+<h4>Layout-sensitive syntax</h4>
+<p>
+Layout of program code is significant in Timber. In many cases, sequences of syntactic elements can be written in
+tabular form, where each new item starts on a new line and in the same column as the beginning of the previous item. Multi-line
+items are possible by intending subsequent lines; the end of the sequence is signalled by "outdenting", i.e. indenting
+less, as in the example
+<pre>
+   showSeq xs = concat (map showLine xss)
+     <b>where</b> prec = 100
+           showLine x = map (showItem 10)
+                            (comp prec xx)
+
+   showItem n x = format n ('_' : g x)
+</pre>
+<p>
+The definition of <tt>showSeq</tt> has a <tt>where</tt>-clause with a list of two local definitions (defining <tt>prec</tt> and
+<tt>showLine</tt>). The definition of <tt>showLine</tt> spans two lines, indicated by indentation. The last definition,
+of <tt>showItem</tt>, has another indentation level, thus is not part of the <tt>where</tt>-clause and is hence not
+local to <tt>showSeq</tt>. Instead <tt>showSeq</tt> and <tt>showItem</tt> form another list of bindings.
+<p>
+It is possible to avoid layout-sensitive syntax by enclosing such sequences in braces and using semi-colon as
+separator: <tt>let {x=1; y=f x 3} in g x y</tt>; this is generally not recommended.
+
+<h4>Basic forms of expressions</h4>
+
+<ul>
+  <li> Variables. A variable is an identifier (which may be qualified and which may be an operator enclosed in parentheses).
+<p>
+  <table align=center><TR>
+<TH> Examples
+</TH>
+</TR>
+<TR><TD><tt>x, counter, Dictionary.d, (+)</tt></TD></TD></TR>
+</table>
+
+  </li>
+  <li> Literals. Timber literals include integer literals, floating point literals, character literals and string literals. There
+  are no surprises here and we give just a few examples.
+  <p> 
+<table align=center><TR>
+  <TH>Type of literal
+</TH> 
+<TH> Examples
+</TH>
+</TR>
+<TR><TD><tt>Int</tt></TD><TD><tt> 37, 0, -123</tt></TD></TR>
+<TR><TD><tt>Float</tt></TD><TD><tt>1.23, 3E12, 0.4567E-6</tt></TD></TR>
+<TR><TD><tt>Char</tt></TD><TD><tt>'a', '3', '\n', '\t', '\\'</tt></TD></TR>
+<TR><TD><tt>String</tt></TD><TD><tt>"Hi", "Error\n"</tt></TD></TR>
+</table>
+<p>
+Every occurrence of an integer literal <em>except in patterns</em> is during desugaring replaced by application of the function
+<tt>fromInt</tt> to the literal. The Prelude defines
+<pre>
+<b>typeclass</b> IntLiteral a <b>where</b>
+  fromInt :: Int -> a
+</pre>
+and instances for <tt>Int</tt> (the identity function) and <tt>Float</tt> (conversion).
+<p>
+This device will make many functions that mention integer literals usable for both <tt>Int</tt> and <tt>Float</tt> arguments;
+a simple example is
+<pre>
+sum :: [a] -> a \\ Num a, IntLiteral a
+sum [] = 0
+sum (x : xs) = x + sum xs
+</pre>
+</li>
+<li> Function (and constructor)  application. Application is denoted by juxtaposition, binds tighter than all operators and is left associative.
+<p>
+<table align=center><TR>
+<TH> Examples
+<TH>Comments</TH>
+</TR>
+<TR><TD><tt>f 3</tt></TD><TD>Parentheses not needed</TD></TR>
+<TR><TD><tt>g (x+2)</tt></TD><TD>Parentheses necessary</TD></TR>
+<TR><TD><tt>Just (f x)</tt></TD><TD>Constructor <tt>Just</tt> applied to <tt>f x</tt></TD></TR>
+<TR><TD><tt>map f (g xs)</tt></TD><TD><tt>map f</tt> applied to <tt>g xs</tt></TD></TR>
+<TR><TD><tt>hMirror (x,y)&nbsp;</tt></TD><TD>One argument, which is a pair</TD></TR>
+</table>
+</li>
+<li> Operator application. An operator may be used in infix form between two operands. This is just syntactic
+sugar for application.
+<p>
+  <table align=center><TR>
+<TH> Examples
+</TH><TH>Desugared forms</TH>
+</TR>
+<TR><TD><tt>x+3</tt></TD><TD><tt>(+) x 3</tt></TD></TR>
+<TR><TD><tt>f x+3*x</tt></TD><TD><tt>(+) (f x) ((*) 3 x)</tt></TD></TR>
+<TR><TD><tt>3 `elem` xs&nbsp;&nbsp;</tt></TD><TD><tt>elem 3 xs</tt></TD></TR>
+</table>
+<p>
+Precedence and associativity of operators is determined syntactically; see the <a href="lex.html">lexical structure</a> page for details.</li>
+<li> Constructors. A constructor is defined in a data type definition or is one of the primitive constructors <tt>:</tt> and <tt>[]</tt>
+for lists, <tt>False</tt> and <tt>True</tt> for <tt>Bool</tt> and <tt>()</tt> for <tt>()</tt>.</li>
+<li> Lambda expressions. <p>
+<pre>
+\<em>pat</em><font color=red>+</font> -> <em>expr</em>
+</pre>
+<p>
+denoting anonymous functions. The sequence of patterns must be linear, i.e. may not include more than one occurrence
+of any variable.
+<p>
+<table align=center><TR>
+<TH> Example
+</TH>
+</TR>
+<TR><TD><tt>\x -> x+3</tt></TD></TR>
+<TR><TD><tt>\ (Just x) d -> insert x 0 d</tt></TD></TR>
+</table>
+</li>
+<li>Tuples.
+<p>
+Pairs, triples etc are expressed using parenheses as delimiters and comma as separator. These are also desugered to
+application:
+<p>
+  <table align=center><TR>
+<TH> Examples
+</TH><TH>Desugared forms</TH>
+</TR>
+<TR><TD><tt>(a,b)</tt></TD><TD><tt>(,) a b</tt></TD></TR>
+<TR><TD><tt>(f x,3+5,True)</tt></TD><TD><tt>(,,) (f x) ((+) 3 5) True</tt></TD></TR>
+</table>
+<p>
+Here <tt>(,)</tt>, <tt>(,,)</tt> etc are primitive constructors for the types of pairs, triples etc.
+</li>
+<li> List expressions.
+<p> List expressions are sequences delimited by square brackets and with comma as separators;<tt>[1,3,7]</tt>
+is a list with three elements. This form is desugared to the primitive form of lists, which has as constructors
+<tt>[]</tt> (the empty list) and <tt>:</tt> ("cons", which builds
+a list with its first argument as first element ("head") and second argument as remainder ("tail")).
+<p>
+  <table align=center><TR>
+<TH> Examples
+</TH><TH>Desugared forms</TH>
+</TR>
+<TR><TD><tt>[1,3,7]</tt></TD><TD><tt>(:) 1 ((:) 3 ((:) 7 []))</tt></TD></TR>
+<TR><TD><tt>[f x, p 3]&nbsp;&nbsp;</tt></TD><TD><tt>(:) (f x) ((:) (p 3) [])</tt></TD></TR>
+</table>
+<p>
+
+<li>
+Let expressions.
+<p>
+<pre>
+<b>let</b> <em>bind</em><font color=red>+</font> <b>in</b> <em>expr</em>
+</pre>
+<p> where the list of bindings is layout-sensitive. The bindings are recursive, i.e all the
+names defined in the bind list are in scope in the right hand sides of these bindings (and, of course,
+in the main expression).
+<p>
+  <table align=center><TR>
+<TH> Example
+</TH><TH>Comments</TH>
+</TR>
+<TR><TD><tt><b>let</b> size = f 100</tt></TD><TD><tt>f</tt>, defined below, is in scope</TD></TR>
+<TR><TD><tt>&nbsp;&nbsp;&nbsp;&nbsp;f 0 = 0 </tt></TD><TD>Pattern-matching allowed</TD></TR>
+<TR><TD><tt>&nbsp;&nbsp;&nbsp;&nbsp;f x = g x (x+2) </tt></TD><TD></TD></TR>
+<TR><TD><tt><b>in</b> concat (map f xs)</tt></TD><TD></TD></TR>
+</table>
+<p>
+</li>
+<a name="struct">
+<li> Struct expressions. Expressions denoting values of a struct type come in several forms:
+<ul><li> Fully defined struct expression.<p>
+<pre>
+<font color=red>[</font> <em>type_constructor</em> <font color=red>]</font> { <em>field</em> <font color=red>(</font><tt>,</tt> <em>field</em> <font color=red>)+</font> }
+</pre>
+where <em>field</em> has the form 
+<pre>
+<em>selector</em> = <em>expr</em>
+</pre>
+  The <em>type_constructor</em> is the name of a struct type. Since the struct type is uniquely determined
+by its fields, the type name is optional.
+<p>
+  <table align=center><TR>
+<TH> Examples
+</TH>
+</TR>
+<TR><TD><tt>Point {x=3, y=1}</tt></TD></TR>
+<TR><TD><tt>{x=3, y=1}</tt></TD></TR>
+<TR><TD><tt>Counter {inc = inc, read = read}</tt></TD></TR>
+</table>
+<p> The examples presupposes type definitions
+<pre>
+<b>struct</b> Point <b>where</b>
+  x, y :: Int
+
+<b>struct</b> Counter <b>where</b>
+  inc  :: Action
+  read :: Request Int
+</pre>
+<p>
+The last example is to emphasise that selectors (the <tt>inc</tt> and <tt>read</tt> in the left hand
+sides of the fields) are in a separate namespace from variables (the right hand sides). Thus the equations
+are not recursive; the example requires
+that definitions of these variables are in scope.
+</li>
+<li> Incomplete struct expressions.<p>
+<pre>
+<em>type_constructor</em> {<font color=red>[</font> <em>field</em> <font color=red>(</font>, <em>field</em> <font color=red>)+</font><font color=red>]</font> ..}
+</pre>
+<p>
+The trailing <tt>..</tt> indicates that the struct value should be <em>stuffed</em>, by adding fields
+of the form <em>x = x </em> for each selector <em>x</em> that is not explicitly given a value in a field.
+  <p> 
+<table align=center><TR>
+  <TH>Example
+</TH> 
+<TH> expands to
+</TH>
+</TR>
+<TR><TD><tt>Counter {..} </tt></TD><TD><tt> Counter {inc = inc, read = read}</tt></TD></TR>
+<TR><TD><tt>Counter {read = readreq ..}</tt></TD><TD><tt>Counter {read = readreq, inc = inc}</tt></TD></TR>
+<TR><TD><tt>Point {x=0..}</tt></TD><TD><tt>Point {x=0, y=y}</tt></TD></TR>
+</table>
+<p>
+Obviously, because of subtyping, the type name cannot be omitted here.
+</li>
+<li>
+Layout-sensitive struct values.<p>
+<pre>
+<b>struct</b> <em>bind</em><font color=red>+</font>
+</pre>
+<p>
+where the bindings have layout-sensitive syntax.
+<p>
+  <table align=center><TR>
+<TH> Example
+</TH>
+</TR>
+<TR><TD><tt>instance showList :: Show [a] \\ Show a</tt></TD></TR>
+<TR><TD><tt>showList = <b>struct</b></tt></TD></TR>
+<TR><TD><tt>&nbsp;&nbsp;show [] = "[]"</tt></TD></TR>
+<TR><TD><tt>&nbsp;&nbsp;show (x : xs) = '[':show x ++ preC (map show xs)++"]"</tt></TD></TR>
+</table>
+<p>
+The list of bindings in this form of expression differs from all other occurrences of
+lists of bindings in that they are <em>not recursive</em>. We are defining the selectors in a struct
+but allow pattern matching equations in layout-sensitive form; occurrence of the same name as a
+variable in the right hand side must refer to some other definition in scope. This is particularly
+common for structs defined to be type classes, as here. See the section on <a href="tclass.html">type classes</a> for
+more explanatation.
+</ul>
+</li>
+</a>
+<li> Case expressions.<p>
+<pre>
+<b>case</b> <em>expr</em> <b>of</b> <em>alt</em><font color=red>+</font>
+</pre>
+<p>
+where the sequence of alternatives is layout-sensitive. The simplest form of an alternative is
+<p>
+<pre>
+<em>pat</em> -> <em>expr</em>
+</pre>
+<p>
+<table align=center><TR>
+<TH> Example
+</TH>
+</TR>
+<TR><TD><tt><b>case</b> f a b <b>of</b></tt></TD></TR>
+<TR><TD><tt>&nbsp;&nbsp;[] -> 0</tt></TD></TR>
+<TR><TD><tt>&nbsp;&nbsp;x : xs -> g x + h 3 xs </tt></TD></TR>
+</table>
+<p>
+</ul>
+<h4>Classes, actions and requests.</h4>
+<p>
+Classes in Timber should be thought of as in object-oriented programming: a class is a template, from which
+we may create several objects. An object encapsulates its own copy of the state variables defined in the class.
+<p> Actions and requests are methods that a class may expose to the outside; they may manipulate the local
+state of objects.
+<p>
+Procedures are subroutines that may be called by actions and requests; they are typically not exposed
+in interfaces. In contrast to actions and requests, a procedure always reads and writes the local state 
+of its caller, irrespective of the scope in which it was defined.
+<p>
+The syntax of these constructs are similar; they are all built from sequences of statements:
+<ul>
+  <li> A class expression is the keyword <tt><b>class</b></tt> followed by a sequence of statements.
+  <li> An action expression is the keyword <tt><b>action</b></tt> followed by a sequence of statements.
+  <li> A request expression is the keyword <tt><b>request</b></tt> followed by a sequence of statements.
+  <li> A procedure expression is the keyword <tt><b>do</b></tt> followed by a sequence of statements.
+</ul>
+<p>
+In all cases, statement sequences have layout-sensitive syntax. See the  <a href="stmts.html"> statements</a> page
+for further descriptions.
+<a name="after">
+<li> After and before expressions.
+<p>
+<pre>
+<b>after</b> <em>expr</em> <em>expr</em>
+<b>before</b> <em>expr</em> <em>expr</em>
+</pre>
+Here the first <em>expr</em> must be a <a href="time.html"><tt>Time</tt></a> and the second an action;
+the latter is given a new baseline (the <tt>after</tt> case) or deadline (the <tt>before</tt> case).
+
+<h4>Further forms of expressions</h4>
+<p>
+Here we just summarize for the Haskell programmer expression forms that are available also in Timber and with the same syntax:
+<ul>
+  <li> Conditional expressions (<tt>if</tt>-expressions).
+  <li> Explicitly typed expressions.
+  <li> Operator sections.
+  <li> Arithmetic sequences.
+  <li> List comprehensions. 
+</ul>
+
+<script type="text/javascript"> var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www."); document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E")); </script> <script type="text/javascript"> try { var pageTracker = _gat._getTracker("UA-5102454-2"); pageTracker._trackPageview(); } catch(err) {}</script>
+</body> </html>

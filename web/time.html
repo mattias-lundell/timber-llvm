@@ -1,0 +1,127 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">
+<html> <head>
+<link href="simplestyle.css" rel="stylesheet" type="text/css">
+<title>Time constructs</title>
+</head>
+
+<body>
+<h2>Time constructs</h2>
+<h3>Absolute time</h3>
+<p>
+Timber allows explicit expression of time constraints on reactions in
+a program. As a basis for this, we assume a notion of <em>absolute</em> or real time,
+which progresses independently of program executions. With each action
+call in a 
+program is associated two absolute time instants, the
+<em>baseline</em> and the <em>deadline</em>. The intuition is that
+execution of the action must not start before the baseline and must
+be finished by the deadline. The time interval between these two
+instants is the <em>time window</em> of the action.
+<p>
+Timber programs cannot express or access absolute time, but the runtime system
+has access to a realtime clock and can obtain the <em>current
+time</em>.The resolution of this clock is platform-dependent.
+
+<h3>The type <tt>Time</tt></h3>
+<p>
+There is, instead, a primitive type <tt>Time</tt> of
+<em>durations</em>, or lengths of time intervals, that may occur in
+programs.
+Time values can also be computed by the runtime system as the
+duration of the time interval between two instants.
+<p>
+The type is abstract; <tt>Time</tt> values can be constructed using the
+primitive functions
+<pre>
+sec, millisec, microsec :: Int -> Time
+</pre>
+<p>
+which expect a non-negative argument. Of course, <em>e.g.</em>,
+<tt>sec 1</tt> and <tt>millisec 1000</tt> denote
+the same time value.
+<p>
+There is a predefined instance <tt>numTime :: Num Time</tt>,
+so time durations can be added and subtracted using
+arithmetic notation, as in <tt>sec 2 + millisec 500</tt>.
+Subtraction of a larger value from a smaller yields
+time 0 and multiplication is undefined (an attempt to multiply
+two time values raises an exception).
+<p>
+To deconstruct time values, one uses the primitive functions
+<pre>
+secOf, microsecOf :: Time -> Int
+</pre>
+<p>
+<tt>secOf</tt> rounds downwards to whole seconds
+and <tt>microsecOf</tt> returns the fraction,
+a value between 0 and 999999.
+
+<h3>Time constraints</h3>
+<p>
+Time windows of reactions are assigned as follows:
+<ul>
+  <li> The time window of a reaction to an external event has
+  as baseline the time instant when the event occurs, and
+  as deadline an idealised instant infinitely far into the future. 
+
+  <p> In particular, the start action of a program gets as
+  baseline the time instant when program execution begins.
+  <li>
+  <p>When a message without time constraints is sent (i.e., an
+  plain action is called) from a method with current baseline <em>bl</em> and deadline <em>dl</em>,
+  the reaction to the message inherits both <em>bl</em> and <em>dl</em>.</li>
+  <li> <p>
+  The rule in the previous item can be changed by explicit
+  program constructs:
+  <ul>
+  <li> <p>The expression <tt>after</tt> <em>t</em> <em>act</em>
+  sets the effective baseline for <em>act</em> to the current baseline plus <em>t</em>.
+  </li>
+  <li> <p>The expression <tt>before</tt> <em>t</em> <em>act</em> sets
+  the effective deadline for <em>act</em> to its effective baseline plus <em>t</em>.</li>
+  </ul></li>
+  In both cases, <em>act</em> can be any expression of type <tt>Action</tt>, which includes the 
+  time-annotated constructs just introduced. Nested baseline offsets are composed using addition,
+  while multiple deadline offsets are resolved by selecting the minimal value.
+  The relative order of <tt>after</tt> and <tt>before</tt> constructs is not relevant. 
+  
+  <p>Special case: if the baseline denoted by an <tt>after</tt> construct is an already passed time instant, 
+  the effective baseline of the reaction is rounded off to the actual time of the call.
+  </ul>
+
+  <h3>The class <tt>timer</tt></h3>
+  <p>
+  As mentioned above, programs cannot access absolute time,
+  but they can measure durations of time intervals. For this,
+  they make use of the primitive class <tt>timer</tt>,
+  where
+  <pre>
+timer :: Class Timer
+
+<b>struct</b> Timer <b>where</b>
+   reset  :: Request ()
+   sample :: Request Time
+</pre>
+  <p>
+  When a new object of class <tt>timer</tt> is created, it 
+  stores the baseline of the current reaction. When, later,
+ <tt>sample</tt> is called, the duration from the stored time to the
+  current baseline is returned. Calls to <tt>reset</tt> updates
+  the stored time to the current baseline.
+
+  <h3>Scheduling</h3>
+  <p>
+  Baselines and deadlines provide the basis for scheduling
+  of Timber programs. The scheduler is preemptive and uses the
+  EDF strategy (Earliest Deadline First):
+ <p>
+  At each interrupt (from external sources or internal
+  runtime system timers) or method termination, the reaction to
+  execute next is chosen as follows:
+  Messages with future baselines cannot yet execute and are
+  stored in a list sorted by baseline with a running timer
+  that expires at the earliest baseline. Eligible messages are
+  sorted by deadline and the message with the earliest deadline is chosen
+  for execution.
+<script type="text/javascript"> var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www."); document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E")); </script> <script type="text/javascript"> try { var pageTracker = _gat._getTracker("UA-5102454-2"); pageTracker._trackPageview(); } catch(err) {}</script>
+</body> </html>

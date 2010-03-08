@@ -1,0 +1,3 @@
+#!/bin/sh
+
+exec ~/src/timber/dist/build/timberc/timberc ${1+"$@"} --datadir `timberc --print-datadir`

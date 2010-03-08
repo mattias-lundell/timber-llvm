@@ -1,0 +1,26 @@
+This is a simple test 
+% cat > Test.t <<%
+module Test where
+
+foo :: Int
+type Foo1 = Int
+type Foo2 a = [a]
+
+data Test = A
+          | B
+          | C
+          | D
+
+% timberc Test.t --ddump-parser 
+[loading module "Test.t"]
+timberc: #### Result after Parser:
+
+module Test where
+foo :: Int
+type Foo1 = Int
+type Foo2 a = [a]
+data Test = A
+          | B
+          | C
+          | D
+% quit

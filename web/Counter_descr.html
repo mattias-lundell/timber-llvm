@@ -1,0 +1,117 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">
+<html> <head>
+<link href="simplestyle.css" rel="stylesheet" type="text/css">
+<title>Counter</title>
+</head>
+
+<body>
+<h3>Counter</h3>
+
+<p>
+The Counter example is a minimal example of a class from which one
+can instantiate objects with state. Several variations are possible;
+here is the one we choose:
+<hr>
+<pre>
+<b>module</b> Counter <b>where</b>
+
+<b>struct</b> Counter <b>where</b>
+  incr  :: Action
+  decr  :: Action
+  value :: Request Int
+
+counter = <b>class</b>
+
+   n := 0
+
+   incr  = <b>action</b> n := n+1
+
+   decr  = <b>action</b> n := n-1
+   
+   value = <b>request</b> result n
+
+   <b>result</b> Counter{..}
+</pre>
+<hr>
+<p>
+Comments:
+<ul>
+  <li> The first four lines of the module body
+  define a <tt>struct</tt>, or record, type,
+  called <tt>Counter</tt>. This type has three <em>methods</em>,
+  and will act as an interface to counter objects.
+  <li> The rest of the module defines a class <tt>counter</tt>.
+  Instances of this class have an internal state consisting of a
+  single integer state variable <tt>n</tt>, initialised to 0 when
+  the instance is created. The effects on the state when methods
+  are invoked on this object is described. Finally, the
+  <tt>result</tt> statement declares that object creation
+  returns a <tt>Counter</tt> interface to the object.
+  Thus <tt>counter</tt> has type <tt>Class Counter</tt>.
+  <li> To create an object of this class, one writes (within a method
+  or another class definition)
+  <pre>
+ctr = <b>new</b> counter
+</pre>
+The variable <tt>ctr</tt> has type <tt>Counter</tt>, and the newly
+  created object can be updated by method calls <tt>ctr.incr</tt> and
+  <tt>ctr.decr</tt>. The state can be read by
+  <pre>
+val <- ctr.value
+</pre>
+  <li> Any method call has exclusive access to the state of the
+  object; there is no need for the programmer to protect calls
+  further.
+  <li> The two <tt>action</tt> methods are invoked asynchronously,
+  while the value-returning <tt>request</tt> of course requires
+  synchronous communication.
+    <li> The notation <tt>Counter{..}</tt> means "assemble an
+    object of type <tt>Counter</tt> from definitions in scope".
+    It would be possible, and maybe preferrable in this small example,
+    to define the methods within the result expression as follows:
+<pre>
+counter = <b>class</b>
+
+   n := 0
+
+   <b>result</b>
+     <b>struct</b>
+       incr  = <b>action</b> n := n+1
+       decr  = <b>action</b> n := n-1
+       value = <b>request</b> result n
+</pre>
+In more complex situations, the <tt>{..}</tt> is a useful convenience.
+  <li> To see an example of use of <tt>counter</tt>, see <a href="EchoServer2_descr.html"><tt>EchoServer2</tt></a>.
+</ul>
+<hr>
+<h4>Variation</h4>
+Java programmers and others may miss constructor methods in the class
+definition. In fact, <tt>counter</tt> itself has the role played
+by constructor methods as seen from the usage indication above. To,
+hopefully, make this clearer we note that one might want to create
+counter objects with some other initial value than 0. We can easily
+achieve this by a slight modification of <tt>counter</tt>:
+<pre>
+counterInit init = <b>class</b>
+  
+   n := init
+
+   ...
+</pre>
+The rest of the class is as before. To create an object with initial
+value 5, we would write
+<pre>
+ctr = <b>new</b> counterInit 5
+</pre>
+<p>
+Thus, we have the typing <tt>counterInit :: Int -> Class Counter</tt>.
+<p>
+We might still keep the definition of <tt>counter</tt>, but this would
+mean code duplication that should be avoided. Instead, we could write
+<pre>
+counter = counterInit 0
+</pre>
+and get a class <tt>counter</tt> with the same usage as our original
+definition.
+<script type="text/javascript"> var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www."); document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E")); </script> <script type="text/javascript"> try { var pageTracker = _gat._getTracker("UA-5102454-2"); pageTracker._trackPageview(); } catch(err) {}</script>
+</body> </html>

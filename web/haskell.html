@@ -1,0 +1,67 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">
+<html> <head>
+<title>Timber for Haskell programmers</title>
+<link href="simplestyle.css" rel="stylesheet" type="text/css">
+</head>
+
+<body>
+<h3>Timber for Haskell programmers</h3>
+<p>
+Much of Timber syntax is taken from Haskell, so the Haskell programmer glancing
+through Timber code will feel at home. This page summarizes instead the most important
+<em>differences</em> between Timber and Haskell.
+<p>
+<ul>
+  <li> Timber has strict semantics, not lazy as Haskell. This has a major impact on the
+  programming styles of the two languages.
+  <li> Timber has Haskell-like type classes, but with slightly 
+  different syntax for both type class and instance declarations. The reserved word starting a
+  type class declaration is <tt>typeclass</tt>.
+  The main reason for this change is that the word <tt>class</tt>
+  in Timber is used to denote the well-known concept from object-oriented programming.
+ Instances of such types are
+  named values of the type, tagged by <tt>instance</tt>. The following excerpt from
+  the Prelude illustrates the concept.
+ <pre>
+<b>typeclass</b> Eq a <b>where</b> 
+  (==),(/=) :: a -> a -> Bool
+
+
+<b>instance</b> eqUnit :: Eq () 
+eqUnit = <b>struct</b>
+  _ == _ = True
+  _ /= _ = False
+</pre>
+  <p>
+One cannot attach a <tt>deriving</tt>-clause to a data type definition. Instead, one can separately
+request default instances of some type classes.
+<li> In addition to data types, Timber has a dual notion of struct types. For both data and struct types there is a notion
+  of subtyping with inclusion polymorphism. 
+<li> Qualified types have another syntax in Timber. To illustrate, here is the definition of the function <tt>elem</tt>
+  from the Prelude:
+  <pre>
+elem :: a -> [a] -> Bool \\ Eq a
+elem x []           = False
+elem x (y : ys)     = x == y || elem x ys
+</pre>
+<p>
+  Note: A call to <tt>elem</tt> will evaluate both arguments
+  completely (because the language is strict), but will not traverse its second argument
+  further when an equality becomes <tt>True</tt> (because the disjunction "operator" <tt>||</tt> is non-strict
+  in its right operand).
+<li> In Timber one can express monadic computations using <tt>do</tt>-notation, but this is reserved for a particular primitive
+   monad <tt>Cmd s</tt> of commands operating on a state <tt>s</tt>. It is possible to define the concept of a general
+  monad as in Haskell (it is in fact defined in the prelude), but the <tt>do</tt>-notation is not available for general monads.
+<li> The Cmd monad provides powerful constructs for object-oriented programming, with objects encapsulating a local
+state and methods manipulating this state. This is achieved while retaining the pure nature of the language; a computation with
+side-effects is clearly indicated by a monadic type (and can hence not be used in a non-monadic context).
+<p>
+Further, methods execute concurrently, but with exclusive access to the state of the object; thus Timber is also a concurrent
+language with some real-time constructs. 
+  <li> The main program of a Timber program is not of type <tt>IO ()</tt> (this type does not exist in Timber), but there must
+be a designated root module with a root definition; the type of this depends on the target environment. In the present
+distribution, only a rudimentary <a href="posix.html">POSIX environment</a> is provided.
+<li> The type system of Timber implements many of the non-standard features that are implemented as extensions in GHC. See
+more details on the page that discusses <a href="advanced.html">advanced features of the type system</a>.
+<script type="text/javascript"> var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www."); document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E")); </script> <script type="text/javascript"> try { var pageTracker = _gat._getTracker("UA-5102454-2"); pageTracker._trackPageview(); } catch(err) {}</script>
+</body> </html>

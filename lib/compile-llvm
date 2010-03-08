@@ -1,0 +1,10 @@
+#!/bin/bash
+
+file=`basename $1 .ll`
+
+echo "llvm-as"
+llvm-as -f $file.ll
+echo "llc"
+llc $file.bc -f -o $file.s -march=x86
+echo "as"
+as $file.s -o $file.o

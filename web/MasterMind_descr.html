@@ -1,0 +1,189 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">
+<html> <head>
+<link href="simplestyle.css" rel="stylesheet" type="text/css">
+</head>
+
+<body>
+<h3>MasterMind</h3>
+<a href="http://en.wikipedia.org/wiki/Mastermind_(board_game)">MasterMind</a> is a board game with two players; in this
+case the user chooses the secret and the program does the guessing.
+Here is a sample interaction:
+<pre>
+examples> ./MasterMind
+Welcome to Mastermind!
+Choose your secret. Press return when ready.
+
+My guess: Red Blue Blue Red
+Answer (two integers): 1 1
+My guess: Blue Black Yellow Red
+Answer (two integers): 2 0
+My guess: Green Black Red Red
+Answer (two integers): 0 0
+My guess: Blue Blue Yellow White
+Answer (two integers): 3 0
+My guess: Blue Blue Yellow Blue
+Answer (two integers): 3 0
+My guess: Blue Blue Yellow Yellow
+Answer (two integers): 4 0
+Yippee!
+Do you want to play again? (y/n) n
+examples> 
+</pre>
+The program is rather long and is appended at the end of this page. 
+We only note a few things:
+<ul>
+  <li> The program makes use of two library modules
+  <tt>Data.Functional.List</tt> and <tt>RandomGenerator</tt>. These
+   are parts of the (presently very experimental) Timber library.
+  <li> The program complains if the user gives contradictory answers,
+  asks for the secret and explains the user's mistake.
+  </ul>
+  
+<hr>
+<pre>
+<b>module</b> MasterMind <b>where</b>
+
+<b>import</b> Data.Functional.List
+<b>import</b> RandomGenerator
+<b>import</b> POSIX
+
+<b>data</b> Colour = Red | Blue | Green | Yellow | Black | White
+
+<b>default</b> eqColour :: Eq Colour
+        showColour :: Show Colour 
+        parseColour :: Parse Colour
+        eqAnswer :: Eq Answer
+
+<b>type</b> Guess = [Colour]
+
+<b>data</b> Answer = Answer Int Int
+
+<b>instance</b> showAnswer :: Show Answer <b>where</b>
+   show (Answer e n) = show e ++ " " ++ show n
+
+<b>instance</b> showGuess :: Show Guess <b>where</b>
+  show ss = unwords (map show ss)
+
+<b>type</b> Board = [(Guess,Answer)]
+
+allColours = [Red, Blue, Green, Yellow, Black, White]
+
+allCodes :: Int -> [Guess]
+allCodes 0 = [[]]
+allCodes n = concat [ [c:cs | c <- allColours] 
+                    | cs <- allCodes (n-1)]
+
+mkAnswer :: String -> Answer
+mkAnswer cs = Answer e n
+    <b>where</b> [e,n] = map parse (words cs)
+
+answer :: Guess -> Guess -> Answer
+answer guess code = Answer e n
+   <b>where</b> 
+      e = equals guess code
+
+      n  = sum [ min (count c guess) (count c code) 
+               | c <- allColours] - e
+
+      count c xs = length [x | x <- xs, x==c]
+
+      equals [] []  = 0
+      equals (x:xs) (y:ys)
+        | x==y      = 1 + equals xs ys
+        | otherwise = equals xs ys
+
+
+contradictions :: Board -> Guess -> Board
+contradictions board c = 
+      [ (g,r) | (g,r) <- board, answer g c /= r ]
+
+consistent :: Board -> [Guess] -> [Guess]
+consistent board cs = 
+      [ c | c <- cs, null (contradictions board c) ]
+
+<b>data</b> State = Idle | JustGuessed | GameOver | GetSecret
+           
+root env = <b>class</b>
+  
+  gen = <b>new</b> baseGen (microsecOf env.startTime)
+
+  board := []
+  cs := [] 
+  state := Idle
+
+  shift = <b>do</b>
+     r <- gen.next
+     n = r `mod` (length cs)
+     ys = take n cs
+     zs = drop n cs
+     cs := zs ++ ys
+  
+  startGame = <b>do</b>
+    board := []
+    cs := []
+    env.stdout.write 
+          "Choose your secret. Press return when ready.\n"
+    state := Idle
+
+  mkGuess = <b>do</b>
+     <b>if</b> null cs <b>then</b>
+         env.stdout.write "Contradictory answers!\n"
+         env.stdout.write "Tell me your secret: "
+         state := GetSecret
+     <b>else</b>
+         shift
+         env.stdout.write ("My guess: "++show (head cs)++"\n")
+         env.stdout.write "Answer (two integers): "
+         state := JustGuessed
+
+  checkQuit = <b>do</b>
+     env.stdout.write "Do you want to play again? (y/n) "
+     state := GameOver
+
+  inpHandler inp = <b>action</b>
+    <b>case</b> state <b>of</b>
+      Idle ->        
+          cs := allCodes 4
+          mkGuess
+
+      JustGuessed ->
+          <b>case</b> map parse (words inp)  <b>of</b>
+             [Right e, Right n] ->
+                 <b>if</b> e == 4 <b>then</b>
+                     env.stdout.write "Yippee!\n"
+                     checkQuit 
+                <b>else</b>
+                     c:cs' = cs
+                     board := (c,ans) : board
+                     cs := consistent board cs'
+                     mkGuess
+             _ -> env.stdout.write "Answer must be two integers separated by spaces; try again\n"
+       
+      GameOver ->
+          <b>if</b> head inp == 'y' <b>then</b>
+              startGame
+          <b>else</b>
+              env.exit 0
+
+      GetSecret ->
+        <b>case</b> map parse (words inp) <b>of</b>
+          es | length es==4
+              && all isRight es ->
+                  ss = map fromRight es
+                  (g',r'):_ = contradictions board ss
+                  env.stdout.write ("When I guessed "++show g'++ 
+                  ", you answered "++show r'++".\n")
+                  env.stdout.write ("Correct answer should have been "++
+                                   show (answer g' ss)++".\n")
+                 checkQuit
+          _ -> env.stdout.write "Secret must be four colours separated by spaces; try again\n"
+
+
+  <b>result</b>
+     <b>action</b>
+         env.stdin.installR inpHandler
+         env.stdout.write "Welcome to Mastermind!\n"
+         startGame
+</pre>
+<script type="text/javascript"> var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www."); document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E")); </script> <script type="text/javascript"> try { var pageTracker = _gat._getTracker("UA-5102454-2"); pageTracker._trackPageview(); } catch(err) {}</script>
+</body> </html>
