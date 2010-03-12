@@ -49,8 +49,8 @@ typedef WORD *ADDR;
 #define Float float
 #define Char char
 #define Bool char
-#define FALSE char          // alias for singleton type
-#define TRUE char           // alias for singleton type
+#define FALSETYPE char          // alias for singleton type
+#define TRUETYPE char           // alias for singleton type
 #define TUP0 char
 
 #define UNIT TUP0
@@ -161,26 +161,16 @@ extern WORD __GG__Time[] ;
 #error "Can not define CAS on your architecture."
 #endif
 #endif
-
-
-//#define NEW(t,addr,words) new((ADDR)addr,words);
 /*
 #define NEW(t,addr,words)       { ADDR top,stop; \
-                                  do { \
-                                    addr = (t)hp; \
-                                    stop = lim; \
-                                    top = ((ADDR)addr)+(words); \
-                                  } while (!CAS(addr,top,&hp)); \
-                                  if (top>=stop) { \
-                                    addr = (t)force((words),(ADDR)addr<stop?(ADDR)addr:0); \
-                                  } \
-                                } 
+                                  do { addr = (t)hp; stop = lim; top = ((ADDR)addr)+(words); } \
+                                  while (!CAS(addr,top,&hp)); \
+                                  if (top>=stop) { addr = (t)force((words),(ADDR)addr<stop?(ADDR)addr:0);} }
 */
+
 #define NEW(t,addr,words)       { ADDR tmp; \
                                   new(&tmp,words); \
                                   addr = (t)tmp; } 
-
-
 
 // Note: soundness of the spin-loop above depends on the invariant that lim is never changed unless hp also changes.
 

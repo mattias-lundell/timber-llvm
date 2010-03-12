@@ -104,7 +104,6 @@ int prio_min, prio_max;
 
 
 Thread newThread(Msg m, int prio, void *(*fun)(void *), int stacksize) {
-    printf("newThread\n");
     Thread t = NULL;
     if (nthreads < NTHREADS) {
         t = &threads[nthreads++];
@@ -141,7 +140,6 @@ Thread gcThread;
 #include "gc.c"
 
 void gcStart(void) {
-    printf("gcStart\n");
     pthread_cond_signal(&gcThread->trigger);
 }
 
@@ -570,7 +568,6 @@ void init_rts(int argc, char **argv) {
     
     NCORES = getNumberOfProcessors();
     NTHREADS = NCORES * 4;
-    //NTHREADS = 1;
     if (NTHREADS > MAXTHREADS)
         NTHREADS = MAXTHREADS;
     
@@ -579,7 +576,6 @@ void init_rts(int argc, char **argv) {
     newThread(NULL, prio_max, timerHandler, pagesize);
     
     ENABLE(rts);
-
 }
 
 void new(ADDR* addr, size_t words) { 

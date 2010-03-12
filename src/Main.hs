@@ -204,7 +204,9 @@ compileTimber clo ifs (sm,t_file) ti_file c_file h_file llvm_file
                              encodeCFile ti_file ifc
                              --writeFile c_file mtxt
                              --writeFile h_file htxt
-                             writeFile llvm_file llvm
+                             if doLLVM clo then do writeFile llvm_file llvm
+                                           else do writeFile c_file mtxt
+                                                   writeFile h_file htxt
                              if api clo then do
                                                 writeAPI (rmSuffix ".ti" ti_file) ifc
                                                 return ((n,ifc):ifs')
@@ -246,15 +248,18 @@ makeProg clo cfg root   = do txt <- readFile (root ++ ".t")
                              ifs <- compileAll (clo {shortcut = True}) [] ps
                              r <- checkRoot clo ifs root
                              let basefiles  = map (rmSuffix ".t" . snd) ps
-                                 c_files    = map (++ ".c") basefiles
-                                 o_files    = map ((++ ".o") . rmDirs) basefiles
-                                 bc_files   = map ((++ ".bc") . rmDirs) basefiles
-                                 ll_files   = map (++ ".ll") basefiles
-                             --mapM (compileC cfg clo) c_files
-                             mapM (compile cfg clo) ll_files
-                             --linkO cfg clo{outfile = root} r o_files
-                             --tr "aaaaaaaaaaaaaaaaaaaaaa---------------------aaaaaaaaaaaaaaa"
-                             link cfg clo{outfile = root} r bc_files
+                                 
+                             if doLLVM clo then do       
+                                             let ll_files   = map (++ ".ll") basefiles
+                                                 bc_files   = map ((++ ".bc") . rmDirs) basefiles
+                                             mapM (compileLLVM cfg clo) ll_files              
+                                             linkBC cfg clo{outfile = root} r bc_files
+                                           else do
+                                             let c_files   = map (++ ".c") basefiles
+                                                 o_files   = map ((++ ".o") . rmDirs) basefiles
+                                             mapM (compileC cfg clo) c_files              
+                                             linkO cfg clo{outfile = root} r o_files
+                             
   where nonDummy (_,(_,Syntax.Module n _ _ _)) = str n /= ""
 
 
@@ -372,18 +377,27 @@ main2 args          = do (clo, files) <- Exception.catch (cmdLineOpts args)
                          Monad.when (root/="") (makeProg clo cfg root)
 
                          let basefiles = map (rmSuffix ".t") t_files
-                             c_files   = map (++ ".c") basefiles
-                             ll_files   = map (++ ".ll") basefiles
-                         --mapM (compileC cfg clo) c_files
-                         mapM (compile cfg clo) ll_files
+                             
+                         if doLLVM clo then do
+                                         let ll_files   = map (++ ".ll") basefiles
+                                         mapM (compileLLVM cfg clo) ll_files
+                                       else do
+                                         let c_files   = map (++ ".c") basefiles
+                                         mapM (compileC cfg clo) c_files
+
                          Monad.when (stopAtO clo) stopCompiler
 
                          let basenames = map rmDirs basefiles
-                             o_files'  = map (++ ".o") basenames
-                             bc_files' = map (++ ".bc") basenames
+
                          Monad.when(not (null basenames)) (do r <- checkRoot clo ifs (last basenames)
+                                                              if doLLVM clo then do
+                                                                              let bc_files' = map (++ ".bc") basenames
+                                                                              linkBC cfg clo r (bc_files ++ bc_files')
+                                                                            else do
+                                                                              let o_files'  = map (++ ".o") basenames
+                                                                              linkO cfg clo r (o_files ++ o_files'))
                                                               --linkO cfg clo r (o_files ++ o_files')
-                                                              link cfg clo r (bc_files ++ bc_files'))
+                                                              --link cfg clo r (bc_files ++ bc_files'))
 
                          return ()
 

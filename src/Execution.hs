@@ -43,12 +43,10 @@
 module Execution (
                   abortCompiler,
                   stopCompiler,
-                  --compileC,
-                  --compileLLVM,
-                  --linkO,
-                  --linkBC
-                  compile,
-                  link
+                  compileC,
+                  compileLLVM,
+                  linkO,
+                  linkBC
                  ) where
     
 import System (system, exitWith, ExitCode(..))
@@ -60,11 +58,13 @@ import Common
 import Config
 import Name
 
-compile cfg clo files | doLLVM clo = compileLLVM cfg clo files
-                      | otherwise  = compileC cfg clo files
+compile cfg clo file
+    | doLLVM clo = compileLLVM cfg clo (file ++ ".ll")
+    | otherwise  = fail $ show file -- compileC cfg clo (file ++ ".c")
 
-link cfg clo files    | doLLVM clo = linkBC cfg clo files
-                      | otherwise  = linkO cfg clo files
+link cfg clo files
+    | doLLVM clo = linkBC cfg clo files
+    | otherwise  = fail $ show files -- linkO cfg clo files
 
 
 compileLLVM global_cfg clo ll_file = do

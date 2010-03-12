@@ -95,7 +95,6 @@ extern int timerQdirty;
 
 
 void initheap() {
-    //printf("initheap\n");
         base = allocwords(HEAPSIZE);
         if (!base)
                 panic("Cannot allocate initial heap");
@@ -103,11 +102,10 @@ void initheap() {
         hp = base + 1;
         lim = base + HEAPSIZE - 1;                      // leave room for a one word node at the end
         heapchain = base;
-        printf("# Fresh heap: base=%x lim=%x (hp=%x)\n", (int)base, (int)lim, (int)hp);
+        // printf("# Fresh heap: base=%x lim=%x (hp=%x)\n", (int)base, (int)lim, (int)hp);
 }
 
 void pruneStaticHeap() {
-    //printf("pruneStaticHeap\n");
         ADDR lim0 = hp;
         ADDR base0 = realloc(base, BYTES(hp - base));   // Let current heap shrink to its current size
         if (base0 != base)
@@ -139,12 +137,11 @@ pthread_cond_t alloc;
 pthread_cond_t alloc2;
 
 ADDR force(WORD size, ADDR last) {                      // Overflow in fromspace
-    //printf("force\n");
         ADDR a;
         if (size > HEAPSIZE-3) panic("Excessive heap block requested");
 
         DISABLE(rts);
-        //fprintf(stderr, "# force: base=%x, lim=%x, hp=%x, last=%x\n", (int)base, (int)lim, (int)hp, (int)last);
+        // fprintf(stderr, "# force: base=%x, lim=%x, hp=%x, last=%x\n", (int)base, (int)lim, (int)hp, (int)last);
         if (last) {               // only extend if we were first to reach critical section
                 a = allocwords(HEAPSIZE);
                 if (!a) panic("Cannot allocate more memory");
@@ -158,21 +155,18 @@ ADDR force(WORD size, ADDR last) {                      // Overflow in fromspace
                 last[0] = 0;                            // mark the end of a heap segment (nulled gcinfo)
                 last[1] = (WORD)hp;
                 pthread_cond_broadcast(&alloc);
-                //fprintf(stderr, "# new:   base=%x lim=%x (hp=%x)\n", (int)base, (int)lim, (int)hp);
+                // fprintf(stderr, "# new:   base=%x lim=%x (hp=%x)\n", (int)base, (int)lim, (int)hp);
         } else {
                 while (hp >= lim)
                         pthread_cond_wait(&alloc, &rts);
         }
         ENABLE(rts);
 
-        //NEW(ADDR,a,size);
-        new(&a,size);
-        a = (ADDR)a;
+        NEW(ADDR,a,size);
         return a;
 }
 
 ADDR force2(WORD size, ADDR last, ADDR info) {          // Overflow in tospace
-    //printf("force2\n");
         ADDR a;
         if (size > HEAPSIZE-3) panic("Excessive heap block requested");
         
@@ -201,7 +195,6 @@ ADDR force2(WORD size, ADDR last, ADDR info) {          // Overflow in tospace
 }
 
 ADDR copystateful(ADDR obj, ADDR info) {
-        //printf("copystateful\n");
         WORD i = STATIC_SIZE(info);
         ADDR dest, datainfo = IND0(obj+i);              // actual mutable struct follows right after the Ref struct
         WORD size = i + STATIC_SIZE(datainfo);          // dataobj must be a GC_STD or a GC_BIG
@@ -219,7 +212,6 @@ ADDR copystateful(ADDR obj, ADDR info) {
 }
 
 ADDR copy(ADDR obj) {
-    //printf("copy\n");
         if (!ISWHITE(obj))                              // don't copy if obj is a tospace address or a low range constant
                 return obj;
         ADDR dest, info = IND0(obj);
@@ -243,7 +235,6 @@ ADDR copy(ADDR obj) {
 
 
 ADDR scan(ADDR obj) {
-    //printf("scan\n");
         ADDR info = IND0(obj);
         if (!info)                                      // if gcinfo is null we have reached the end of a tospace segment
                 return (ADDR)0;                         
@@ -306,7 +297,6 @@ ADDR scan(ADDR obj) {
 }
 
 void gc() {
-    //printf("gc\n");
         heapchain2 = (ADDR)allocwords(HEAPSIZE);       // allocate tospace (initial segment)
         base2 = heapchain2;
         base2[0] = 0;
@@ -351,7 +341,7 @@ void gc() {
         base = base2;
         lim = lim2;
         hp = hp2;
-        printf("!!!Heap switched:  base=%x lim=%x (hp=%x)\n", (int)base, (int)lim, (int)hp);
+        // printf("!!!Heap switched:  base=%x lim=%x (hp=%x)\n", (int)base, (int)lim, (int)hp);
 
         base2 = lim2 = hp2 = (ADDR)0;
         scanbase = scanp = (ADDR)0;
@@ -366,12 +356,10 @@ int heapLevel(int steps) {
         link = (ADDR)link[0];
     }
     acc += hp-base;
-    //printf("heaplevel(%d) > 13\n", acc/(HEAPSIZE/steps));
     return acc / (HEAPSIZE/steps);
 }
 
 void gcInit() {
-    //printf("gcInit\n");
 #if defined(__APPLE__)
     edata = (ADDR)get_edata();
 #endif
