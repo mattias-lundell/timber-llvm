@@ -99,6 +99,8 @@ k2cBindStubsH bs                 = vcat (map f bs)
 
 
 -- Generate types
+k2cType (TCon (Prim TRUE _) _)  = text "TRUETYPE"
+k2cType (TCon (Prim FALSE _) _) = text "FALSETYPE"
 k2cType (TCon n _)              = k2cName n
 k2cType (TVar _ _)              = k2cType tPOLY
 

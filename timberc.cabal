@@ -59,7 +59,7 @@ extra-source-files:  rtsPOSIX/Makefile.in,
 Executable timberc
   Main-is:           Main.hs
   Build-Depends:     base >= 4, haskell98, pretty >= 1.0.0.0, binary >= 0.5.0.2, 
-                     mtl >= 1.1, filepath >= 1.1, array >= 0.1, directory == 1.0.0.3,
+                     mtl >= 1.1, filepath >= 1.1, array >= 0.1, directory >= 1.0.0.3,
                      bzlib >= 0.5.0.0, bytestring >= 0.9, containers >= 0.2
   build-tools:	     happy >= 1.18
   hs-source-dirs:    src

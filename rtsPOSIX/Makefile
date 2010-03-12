@@ -1,9 +1,9 @@
-prefix       = /home/capitrane/installed/timber//share/timberc-1.0.3
+prefix       = /home/capitrane/local/timber-llvm/share/timberc-1.0.3
 CC           = gcc
 CFLAGS       = -g -O2 -m32 -pthread -D_GNU_SOURCE=1
 INSTALL	     = /usr/bin/install -c
 
-TIMBERC      = /home/capitrane/installed/timber//bin/timberc
+TIMBERC      = /home/capitrane/local/timber-llvm/bin/timberc
 TIMBERLIBS   = Prelude.t $(filter-out Prelude.t,$(notdir $(wildcard ../lib/*.t)))
 OBJS         = $(TIMBERLIBS:.t=.o)
 
@@ -14,7 +14,6 @@ all:
 	@printf "Run make $(DEST) to build this RTS in-place.\n"
 	@printf "Notice that building in-place requires the RTS to reside in\n"
 	@printf "an installed timberc tree.\n\n"
-
 
 $(DEST): $(OBJS) rts.o
 	ar rc $(DEST) $(OBJS) rts.o

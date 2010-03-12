@@ -74,6 +74,7 @@ prepare4c e2 e3 m             = localStore (pModule e2 e3 m)
 
 data Env                        = Env { decls   :: Decls,                 -- all structs in scope
                                         tenv    :: TEnv,                  -- all fun and val variables in scope
+                                        blockvs :: [Name],                -- variables defined in the current C block
                                         strinfo :: Map Name (Int,[Bool]), -- number of ptr fields + 1 / relevance flags of tvars for each struct
                                         polyenv :: Map Name (Exp,Int),    -- status location (refexp,bit-number) for type variables in scope
                                         conval  :: Map Name Int,          -- numerical values of all variant constructor names
@@ -81,7 +82,8 @@ data Env                        = Env { decls   :: Decls,                 -- all
                                         tagged  :: [Name],                -- lists all struct variants that use an explicit tag field
                                         this    :: Maybe Name }
 
-env0                            = Env { decls = [], tenv = [], strinfo = [], polyenv = [], conval = [], nulls = [], tagged = [], this = Nothing }
+env0                            = Env { decls = [], tenv = [], blockvs = [], strinfo = [], polyenv = [], 
+                                        conval = [], nulls = [], tagged = [], this = Nothing }
 
 addDecls ds env                 = env { decls = ds ++ decls env, strinfo = info ++ strinfo env, conval = convals ++ conval env, 
                                         nulls = nullcons ++ nulls env, tagged = taggedcons ++ taggedunions ++ tagged env }
@@ -98,6 +100,8 @@ structInfo (Struct vs te _)     = (length (ptrFields te []), map (`elem` relevan
   where relevant                = rng (varFields te)
 
 addTEnv te env                  = env { tenv = te ++ tenv env }
+
+addTEnv' te env                 = addTEnv te (env { blockvs = dom te ++ blockvs env })
 
 addVals te env                  = env { tenv = mapSnd ValT te ++ tenv env }
 
@@ -311,7 +315,7 @@ pBinds f env xs                 = do (bfs,xs) <- fmap unzip (mapM (f env) xs)
 pBind env (x, Val t e)          = do (bf,t',e) <- pRhsExp env e 
                                      return (bf, (x, Val (pAType t) (cast t t' e)))
 pBind env (x, Fun vs t te c)    = do te' <- newEnv paramSym (polyTagTypes (length vs))
-                                     c <- pCmd (addVals te (addPolyEnv vs (dom te') env)) t c
+                                     c <- pCmd0 (addVals te (addPolyEnv vs (dom te') env)) t c
                                      return (id, (x, Fun [] (pAType t) (te' ++ pATEnv te) c))
 
 
@@ -332,7 +336,7 @@ pSBind ty te0 env (x,Fun vs t te c)
                                          bs1  = [ b | b@(_,Val _ e) <- bs0, not (isEVar e) ]
                                          te1' = te' ++ pATEnv te1
                                          env' = addPolyEnv vs (dom te') env
-                                     c <- pCmd (setThis y (addVals ((y,ty):te) env')) t0 c
+                                     c <- pCmd0 (setThis y (addVals ((y,ty):te) env')) t0 c
                                      f <- newName functionSym
                                      addToStore (f, Fun [] t0' ((y,pAType ty):te1') (cBind bs1 c))
                                      return (id, (x, Fun [] t0' te1' (CRet (ECall f [] (EThis : map EVar (dom te1'))))))
@@ -341,17 +345,24 @@ pSBind ty te0 env (x,Fun vs t te c)
 
 
 -- Prepare commands
+pCmd0 env t0 c                  = pCmd (env {blockvs = []}) t0 c
+
+
 pCmd env t0 (CRet e)            = do (bf,e) <- pExpT env t0 e
                                      return (bf (CRet e))
 pCmd env t0 (CRun e c)          = do (bf,_,e) <- pExp env e
                                      liftM (bf . CRun e) (pCmd env t0 c)
 pCmd env t0 (CBind _ [] c)      = pCmd env t0 c
+pCmd env t0 c@(CBind _ bs _)
+  | not (null xs)               = do xs' <- mapM (newName . str) xs
+                                     pCmd env t0 (subst (xs `zip` xs') c)
+  where xs                      = dom bs `intersect` blockvs env
 pCmd env t0 (CBind False bs c)  = do (bf,bs) <- pBinds pBind env bs
                                      liftM (bf . CBind False bs) (pCmd env' t0 c)
-  where env'                    = addTEnv (mapSnd typeOf bs) env
+  where env'                    = addTEnv' (mapSnd typeOf bs) env
 pCmd env t0 (CBind True bs c)   = do (bf,bs) <- pBinds pBind env' bs
                                      liftM (CBind True (flatBinds bf ++ bs)) (pCmd env' t0 c)
-  where env'                    = addTEnv (mapSnd typeOf bs) env
+  where env'                    = addTEnv' (mapSnd typeOf bs) env
 pCmd env t0 (CUpd x e c)        = do (bf,e) <- pExpT env (findValT (tenv env) x) e
                                      liftM (bf . CUpd x e) (pCmd env t0 c)
 pCmd env t0 (CUpdS e x e' c)    = do (bf,t1,e) <- pExp env e
@@ -367,7 +378,7 @@ pCmd env t0 (CBreak)            = return CBreak
 pCmd env t0 (CRaise e)          = do (bf,e) <- pExpT env tInt e
                                      return (bf (CRaise e))
 pCmd env t0 (CWhile e c c')     = do (bf,e) <- pExpT env tBool e
-                                     c <- pCmd env t0 c
+                                     c <- pCmd0 env t0 c
                                      liftM (bf . CWhile e c) (pCmd env t0 c')
 pCmd env t0 (CCont)             = return CCont
 pCmd env t0 (CSwitch e alts)    
@@ -427,11 +438,11 @@ mkLitAlt env a                  = a
 
 
 -- Prepare switch alternatives
-pAlt env _ _ t0 (AWild c)       = liftM AWild (pCmd env t0 c)
-pAlt env _ _ t0 (ALit l c)      = liftM (ALit l) (pCmd env t0 c)
+pAlt env _ _ t0 (AWild c)       = liftM AWild (pCmd0 env t0 c)
+pAlt env _ _ t0 (ALit l c)      = liftM (ALit l) (pCmd0 env t0 c)
 pAlt env e (TCon _ ts) t0 (ACon k vs te c)
                                 = do te' <- newEnv paramSym (polyTagTypes (length vs))
-                                     c <- pCmd (addPolyEnv vs (dom te') (addVals te env)) t0 c
+                                     c <- pCmd0 (addPolyEnv vs (dom te') (addVals te env)) t0 c
                                      return (ACon k [] [] (cBind (bs0 te' ++ bs1) c))
   where bs0 te'                 = zipWith mkBind te' (_abcSupply `zip` repeat (ValT tBITS32))
         (_,te0)                 = findStructTEnv env (TCon k (ts ++ map tVar vs))

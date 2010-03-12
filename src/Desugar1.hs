@@ -271,14 +271,18 @@ instance Desugar1 Exp where
             mkLocal s
               | fromMod s == modName env = dropMod s
               | otherwise          = s
-    ds1 env (EBStruct c0 _ bs)     = EBStruct (Just c) labs (ds1 env bs)
+    ds1 env e@(EBStruct c0  _ bs) 
+      | ok c c0                    = EBStruct (Just c) labs (ds1 env bs)
+      | otherwise                  = errorTree "Declared struct type differs from inferred" e
       where labs                   = selsFromType env c
-            c                      = case c0 of Just c -> c; _ -> typeFromSels env (sort (ren env sels))
+            c                      = typeFromSels env (sort (ren env sels))
             sels0                  = bvars bs
             cs                     = concat [ stuffedCons p | BEqn (LPat p) _ <- bs ]
             sels1                  = concatMap (boundSels env) cs \\ sels0
             sels                   = sels0 ++ sels1
             boundSels env (c,ls)   = selsFromType env c \\ ren env ls
+            ok c Nothing           = True
+            ok c (Just c')         = c == typeFromSels env (selsFromType env c')
     ds1 env (ELet bs e)            = ELet (ds1 env bs) (ds1 env e)
     ds1 env (EAp e1 e2)            = EAp (ds1 env e1) (ds1 env e2)
     ds1 env (ETup es)              = ETup (ds1 env es)
@@ -288,8 +292,8 @@ instance Desugar1 Exp where
     ds1 env (ECase e as)           = ECase (ds1 env e) (ds1 env as)
     ds1 env (EMatch m)             = EMatch (ds1 env m)
     ds1 env (EIf e1 e2 e3)         = EIf (ds1 env e1) (ds1 env e2) (ds1 env e3)
-    ds1 env (ENeg (ELit (LInt p i))) = ELit (LInt p (-i))
-    ds1 env (ENeg (ELit (LRat p r))) = ELit (LRat p (-r))
+    ds1 env (ENeg (ELit (LInt p i))) = ds1 env (ELit (LInt p (-i)))
+    ds1 env (ENeg (ELit (LRat p r))) = ds1 env (ELit (LRat p (-r)))
     ds1 env (ENeg e)               = EAp (EVar (name' "negate" e)) (ds1 env e)
     ds1 env (ESeq e1 Nothing e3)   = EAp (EAp (EVar (name' "enumFromTo" e1)) (ds1 env e1)) (ds1 env e3)
     ds1 env (ESeq e1 (Just e2) e3) = EAp (EAp (EAp (EVar (name' "enumFromThenTo" e1)) (ds1 env e1)) (ds1 env e2)) (ds1 env e3)
@@ -297,9 +301,7 @@ instance Desugar1 Exp where
     ds1 env (ESectR e op)          = ESectR (ds1 env e) op
     ds1 env (ESectL op e)          = ESectL op (ds1 env e)
     ds1 env (ESelect e s)          = ESelect (ds1 env e) s
-    ds1 env e@(ELit (LInt _ n))
-  {-  | isPat env                  = e
-      | otherwise               -} = EAp (EVar (name' "fromInt" e)) e 
+    ds1 env e@(ELit (LInt _ n))    = EAp (EVar (name' "fromInt" e)) e 
 
     ds1 env (ETempl Nothing t ss)  = ds1 env (ETempl (Just (name0 "self")) (ds1 env t) ss)
     ds1 env (EDo Nothing t ss)

@@ -15,7 +15,6 @@ all:
 	@printf "Notice that building in-place requires the RTS to reside in\n"
 	@printf "an installed timberc tree.\n\n"
 
-
 $(DEST): $(OBJS) rts.o
 	ar rc $(DEST) $(OBJS) rts.o
 

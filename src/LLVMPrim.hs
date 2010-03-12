@@ -1,4 +1,4 @@
-module LLVMPrimitives where
+module LLVMPrim where
 
 import LLVMKindle
 

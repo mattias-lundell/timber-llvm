@@ -87,6 +87,7 @@ data CfgOpts         = CfgOpts { cCompiler       :: FilePath,
                                  llvmLLVMAS      :: FilePath,
                                  llvmLLC         :: FilePath,
                                  llvmAS          :: FilePath,
+                                 llvmLD          :: FilePath,
                                  compileFlags    :: String,
                                  linkFlags       :: String,
                                  linkLibs        :: String
@@ -106,7 +107,8 @@ data CmdLineOpts     = CmdLineOpts { isVerbose :: Bool,
                                      stopAtO   :: Bool,
                                      doScp     :: Bool,
                                      dumpAfter :: Pass -> Bool,
-                                     stopAfter :: Pass -> Bool
+                                     stopAfter :: Pass -> Bool,
+                                     doLLVM    :: Bool
                                    }
 
 
@@ -170,7 +172,11 @@ options              = [ Option []
                          Option ['S']
                                 ["scp"]
                                 (NoArg DoScp)
-                                "Supercompile the program"
+                                "Supercompile the program",
+                         Option []
+                                ["llvm"]
+                                (NoArg LLVM)
+                                "Compile to LLVM"
                        ]
                        ++ 
                        [ Option []
@@ -206,6 +212,7 @@ data Flag            = Help
                      | DoScp
                      | DumpAfter Pass
                      | StopAfter Pass
+                     | LLVM
                      deriving (Show,Eq)
 
 data TimbercException
@@ -278,7 +285,8 @@ mkCmdLineOpts flags  =  CmdLineOpts { isVerbose = find Verbose,
                                       stopAtO   = find StopAtO,
                                       doScp     = find DoScp,
                                       dumpAfter = find . DumpAfter,
-                                      stopAfter = find . StopAfter
+                                      stopAfter = find . StopAfter,
+                                      doLLVM    = find LLVM
                                     }
   where 
     first def []     = def

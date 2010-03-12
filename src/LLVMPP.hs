@@ -46,7 +46,7 @@ ppValWtyp r@(LLVMConstant typ const) = pp typ <+> ppValWOtyp r
            
 ppValWOtyp :: LLVMValue -> Doc
 ppValWOtyp (LLVMRegister _ reg global) = 
-    if global then text "@" else text "%" <> text reg
+    (if global then text "@" else text "%") <> text reg
 ppValWOtyp (LLVMConstant typ const) = text (show const)
 
 ppBinInstruction :: String -> LLVMValue -> LLVMValue -> LLVMValue -> Doc

@@ -1,5 +1,4 @@
 {-# LANGUAGE  FlexibleInstances #-}
-{-# OPTIONS_GHC -fglasgow-exts #-}
 
 -- The Timber compiler <timber-lang.org>
 --
@@ -39,6 +38,7 @@ module PP (module PP, module Text.PrettyPrint) where
 import Text.PrettyPrint hiding (TextDetails(..))
 import Char(showLitChar)
 
+
 class Pr a where
     pr   :: a -> Doc
     pr x = prn 0 x
@@ -64,9 +64,6 @@ instance Pr Int where
 
 instance Pr (String, String) where
     pr (a, b) = text a <> text b
-
-instance Pr String where
-    pr a = text a
 
 infixl 4 $$$
 a $$$ b       = a $$ text " " $$ b

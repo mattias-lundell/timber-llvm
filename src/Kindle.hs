@@ -636,6 +636,42 @@ instance Subst Bind Name Exp where
     subst s (Fun vs t te c)             = Fun vs t te (subst s c)
 
 
+instance Subst Exp Name Name where
+    subst [] e                          = e
+    subst s (EVar v)                    = EVar (subst s v)
+    subst s (EThis)                     = EThis
+    subst s (ELit l)                    = ELit l
+    subst s (ESel e l)                  = ESel (subst s e) (subst s l)
+    subst s (ENew x ts bs)              = ENew (subst s x) ts (subst s bs)
+    subst s (ECall x ts es)             = ECall (subst s x) ts (subst s es)
+    subst s (EEnter e x ts es)          = EEnter (subst s e) (subst s x) ts (subst s es)
+    subst s (ECast t e)                 = ECast t (subst s e)
+
+instance Subst Cmd Name Name where
+    subst [] c                          = c
+    subst s (CRet e)                    = CRet (subst s e)
+    subst s (CRun e c)                  = CRun (subst s e) (subst s c)
+    subst s (CBind r bs c)              = CBind r (subst s bs) (subst s c)
+    subst s (CUpd x e c)                = CUpd (subst s x) (subst s e) (subst s c)
+    subst s (CUpdS e x e' c)            = CUpdS (subst s e) (subst s x) (subst s e') (subst s c)
+    subst s (CUpdA e i e' c)            = CUpdA (subst s e) (subst s i) (subst s e') (subst s c)
+    subst s (CSwitch e alts)            = CSwitch (subst s e) (subst s alts)
+    subst s (CSeq c c')                 = CSeq (subst s c) (subst s c')
+    subst s (CBreak)                    = CBreak
+    subst s (CRaise e)                  = CRaise (subst s e)
+    subst s (CWhile e c c')             = CWhile (subst s e) (subst s c) (subst s c')
+    subst s (CCont)                     = CCont
+
+instance Subst Alt Name Name where
+    subst s (ACon x vs te c)            = ACon (subst s x) vs te (subst (prune s vs) c)      -- NOTE: no alpha-conversion!!
+    subst s (ALit l c)                  = ALit l (subst s c)
+    subst s (AWild c)                   = AWild (subst s c)
+    
+instance Subst Bind Name Name where
+    subst s (Val t e)                   = Val t (subst s e)
+    subst s (Fun vs t te c)             = Fun vs t te (subst (prune s (dom te)) c)
+
+
 instance Subst Type Name AType where
     subst s (ValT t)                    = ValT (subst s t)
     subst s (FunT vs t ts)              = FunT vs (subst s t) (subst s ts)      -- NOTE: no alpha-conversion!!
@@ -785,18 +821,19 @@ instance Pr Alt where
 
 instance Pr Exp where
     prn 0 (ECall x [] [e1,e2])
-      | isInfix x                       = prn 0 e1 <+> prId2 x <+> prn 1 e2
+      | isInfix x && isSym x            = prn 1 e1 <+> prId2 x <+> prn 1 e2
+    prn 0 (ELit l)                      = prn 0 l
     prn 0 e                             = prn 1 e
 
 
     prn 1 (ECall x [] [e])
-      | isUnaryOp x                     = prId2 x <> prn 1 e
+      | isUnaryOp x && isSym x          = prId2 x <> prn 1 e
     prn 1 (ECast t e)                   = parens (pr t) <> prn 1 e
     prn 1 e                             = prn 2 e
 
     prn 2 (EVar x)                      = prId2 x
     prn 2 (EThis)                       = text "this"
-    prn 2 (ELit l)                      = pr l
+    prn 2 (ELit l)                      = prn 1 l
     prn 2 (ENew x ts bs)
       | all isVal bs                    = text "new" <+> prId2 x <> prTyargs ts <+> text "{" <> commasep prInit bs <> text "}"
     prn 2 (ENew x ts bs)                = text "new" <+> prId2 x <> prTyargs ts <+> text "{" $$

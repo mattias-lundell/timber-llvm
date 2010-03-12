@@ -517,7 +517,7 @@ subst_Alt s (Alt p e)           = Alt (subst r p) e'
   where (r,e')                  = subst_bvs s (idents p) e
 
 --subst_Gen s x e c             = (x,subst s e,subst s c) -- assuming no name clashes
-subst_Gen s x e c               = (rename_var r x,e,c')
+subst_Gen s x e c               = (rename_var r x, subst s e, c')
   where (r,c')                  = subst_bvs s [x] c
 
 --subst_EDo s x t c             = EDo x t (subst s c) -- assuming no name clashes
@@ -885,6 +885,7 @@ instance AlphaConv Kind where
     ac s k                      = return k
     
 
+extSubst s xs  = return s
 extSubst s xs                   = do s' <- mapM ext xs
                                      return (s'++s)
   where ext x                   = do n <- newNum
@@ -1092,7 +1093,7 @@ prConstrs []                    = empty
 prConstrs (c:cs)                = vcat (char '=' <+> pr c : map ((char '|' <+>) . pr) cs)
 
 instance Pr (Name,Constr) where
-    pr (i, Constr ts ps ke)     = prId i <+> hsep (map (prn 1) ts) <+> prContext ps ke
+    pr (i, Constr ts ps ke)     = prId i <+> hsep (map (prn 2) ts) <+> prContext ps ke
 
 
 -- Predicates --------------------------------------------------------------
@@ -1185,11 +1186,12 @@ instance Pr Exp where
                                        nest 4 (pr e')
     prn 0 (EReq e e')           = text "request@" <> prn 2 e $$
                                        nest 4 (pr e')
-    prn 0 (ETempl x t te c)     = text "class@" <> prId x $$
+    prn 0 (ETempl x t te c)     = text "class@" <> prId x <> text "::" <> pr t $$
                                        nest 4 (vpr te) $$
                                        nest 4 (pr c)
     prn 0 (EDo x t c)           = text "do@" <> prId x <> text "::" <> pr t $$
                                        nest 4 (pr c)
+    prn 0 (ELit l)              = prn 0 l
     prn 0 e                     = prn 1 e
 
     prn 1 (EAp e@(ELet bs _) es)
@@ -1201,7 +1203,7 @@ instance Pr Exp where
     prn 2 (ECon c)              = prId c
     prn 2 (ESel e s)            = prn 2 e <> text "." <> prId s
     prn 2 (EVar v)              = prId v
-    prn 2 (ELit l)              = pr l
+    prn 2 (ELit l)              = prn 1 l
     prn 2 (ERec c eqs)          = prId c <+> text "{" <+> hpr ',' eqs <+> text "}"
     prn n e                     = parens (prn 0 e)
 

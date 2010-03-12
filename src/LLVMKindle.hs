@@ -350,7 +350,8 @@ addCurrFunction name rettyp paramtypes = do
   code <- get currf
   fs' <- get fs
   allocs' <- get allocs
-  let fun = LLVMFunction name rettyp paramtypes ((map (\reg -> Alloca reg (getTyp reg)) allocs') ++ code)
+  let fun = LLVMFunction name rettyp paramtypes ((map (\reg -> Alloca reg (drop1Ptr (getTyp reg))) allocs') ++ code)
+--  fail $ show allocs'
   put fs (const $ fun:fs')
   put currf (const [])
   put allocs (const [])

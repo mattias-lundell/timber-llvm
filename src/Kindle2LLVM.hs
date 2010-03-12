@@ -5,11 +5,12 @@ import Common hiding (name, Array)
 import Name hiding (name)
 import qualified Core
 import qualified Core2Kindle
-import Prepare4C hiding (isPtr)
+import qualified Prepare4C as P
 import Control.Monad.State
 import LLVMPP
 import Prelude hiding (and,or,div,rem)
-import LLVMPrimitives
+import LLVMPrim
+import Env
 
 import Data.Int
 import Data.Char
@@ -29,11 +30,11 @@ codeGenModule (Core.Module _ _ _ es' _ _ [bs']) dsi (Module moduleName importNam
   -- add structs from imported files
   let te2 = Core.tsigsOf bs' ++ extsMap es'
   tei <- Core2Kindle.c2kTEnv dsi te2 
-  let env1 = addTEnv (primTEnv++tei++es) (addDecls (primDecls++dsi) env0)
-      env  = addTEnv (mapSnd typeOf binds) (addDecls decls env1)
-      ktypedEs = pDecls env dsi
+  let env1 = P.addTEnv (primTEnv++tei++es) (P.addDecls (primDecls++dsi) P.env0)
+      env  = P.addTEnv (mapSnd typeOf binds) (P.addDecls decls env1)
+      ktypedEs = P.pDecls env dsi
       -- add functions declarations from imported files
-      ktypedEf = mapSnd pType tei
+      ktypedEf = mapSnd P.pType tei
   -- gen code
   setModuleName (show moduleName)
   genPrimitives

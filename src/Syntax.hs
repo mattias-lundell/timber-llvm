@@ -743,6 +743,7 @@ instance Pr Exp where
     prn 0 (EReq v ss)           = text "request"<>prN v $$ nest 4 (pr ss) 
     prn 0 (EAfter e e')         = text "after" <+> prn 12 e <+> pr e'
     prn 0 (EBefore e e')        = text "before" <+> prn 12 e <+> pr e'
+    prn 0 (ELit l)              = prn 0 l
     prn 0 e                     = prn 1 e
 
     prn 11 (EAp e e')           = prn 11 e <+> prn 12 e'
@@ -755,11 +756,11 @@ instance Pr Exp where
     prn 13 (ECon c)             = prId c
     prn 13 (ESel l)             = parens (text "." <> prId l)
     prn 13 (EWild)              = text "_"
-    prn 13 (ELit l)             = pr l
+    prn 13 (ELit l)             = prn 1 l
     prn 13 (ERec Nothing fs)    = text "{" <+> hpr ',' fs <+> text "}"
     prn 13 (ERec (Just(c,b)) fs)= prId c <+> text "{" <+> hpr ',' fs <+> (if b then empty else text "..") <+> text "}"
     prn 13 (EBStruct _ _ bs)    = text "struct" $$ nest 4 (vpr bs)
-    prn 13 (ENeg e)             = text "-" <+> prn 0 e
+    prn 13 (ENeg e)             = text "-" <> prn 0 e
     prn 13 (ESig e qt)          = parens (pr e <+> text "::" <+> pr qt)
     prn 13 (ETup es)            = parens (hpr ',' es)
     prn 13 (ESectR e op)        = parens (pr e <> prOp op)

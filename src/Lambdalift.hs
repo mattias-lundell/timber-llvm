@@ -60,7 +60,8 @@ addDecls ds env                         = env { decls = ds ++ decls env }
 
 setThis vs xs env                       = env { thisSubst = vs `zip` map TThis [1..], thisVars = xs }
 
-addLocals te env                        = env { locals = te ++ locals env }
+addLocals te env                        = env { locals = te ++ prune (locals env) (dom te) }    -- prune so that shadowed variables don't
+                                                                                                -- get lifted multiple times
 
 addExpansions exps env                  = env { expansions = exps ++ expansions env }
 
@@ -109,9 +110,13 @@ llBind env (x, Val t e)                 = do e <- llExp env e
 -- Convert a command
 llCmd env (CBind r bs c)                = do vals' <- mapM (llBind env') vals
                                              funs' <- mapM (llBind (setThis [] [] env')) funs
-                                             mapM_ liftFun funs'
+                                             store <- currentStore
+                                             let fs = dom funs' `intersect` [ f | Right (f,_) <- store ]
+                                             fs' <- mapM (newName . str) fs
+                                             let s = fs `zip` fs'
+                                             mapM_ liftFun (subst s funs')
                                              c' <- llCmd env2 c
-                                             return (cBindR r vals' c')
+                                             return (cBindR r (subst s vals') (subst s c'))
   where (vals,funs)                     = partition isVal bs
         free0                           = evars funs
         free1                           = free0 ++ concat [ xs | (f,(_,xs)) <- expansions env, f `elem` free0 ]

@@ -254,9 +254,7 @@ cBinds env (Binds r te eqs)
   | otherwise                           = errorIds "Illegal value recursion" (dom te')
   where comb False bf bs                = bf . Kindle.CBind False bs
         comb True bf bs                 = Kindle.CBind True (Kindle.flatBinds bf ++ bs)
-        insts                           = dom (filter (\(x,e) -> monoRestrict r (lookup' te x) e) eqs)
-        (te1,te2)                       = partition ((`elem` insts) . fst) te
-        te'                             = cValTEnv te1 ++ cTEnv te2
+        te'                             = cTEnv te
 
 
 -- Translate a list of Core equations into a list of Kindle bindings on basis of declared type
@@ -268,8 +266,8 @@ cEq env te (x,e)                        = case lookup' te x of
                                                 (bf,e) <- cValExpT env t0 e
                                                 return (bf, (x, Kindle.Val t0 e))
                                             Kindle.FunT vs0 ts0 t0 -> do
-                                                (vs,te,t,c) <- cFunT env vs0 ts0 t0 e
-                                                return (id, (x, Kindle.Fun vs t te c))
+                                                (bf,vs,te,t,c) <- cFunT env vs0 ts0 t0 e
+                                                return (bf, (x, Kindle.Fun vs t te c))
 
 
 -- Translate a Core.Exp with a known type into a Kindle.Exp
@@ -290,16 +288,16 @@ adaptVars env (t0:ts) ((x,t1):te)       = do f <- adaptVal env [] t0 [] t1
   where (xs,ts')                        = unzip te
 
 adaptVal env [] s [] t
-  | s == t                              = return id                                                                 -- A
-adaptVal env se s [] t                  = adaptVal env se s ts t1                                                -- B
+  | s == t                              = return id                                                             -- A
+adaptVal env se s [] t                  = adaptVal env se s ts t1                                               -- B
   where ([],ts,t1)                      = Kindle.openClosureType t
 adaptVal env se s ts t
   | l_se >= l_ts                        = do es <- adaptVars env ts se1
                                              f <- adaptVal env se2 s [] t
-                                             return (\e -> f (Kindle.enter e [] es))                                -- C
+                                             return (\e -> f (Kindle.enter e [] es))                            -- C
   | otherwise {- l_se < l_ts -}         = do se' <- newEnv paramSym ss
                                              f <- adaptVal env (se++se') s1 ts t
-                                             return (\e -> Kindle.closure s1 se' (Kindle.CRet (f e)))             -- D
+                                             return (\e -> Kindle.closure s1 se' (Kindle.CRet (f e)))           -- D
   where l_se                            = length se
         l_ts                            = length ts
         (se1,se2)                       = splitAt l_ts se
@@ -310,25 +308,37 @@ adaptVals env (s:ss) (t:ts)             = do f <- adaptVal env [] s [] t
                                              g <- adaptVals env ss ts
                                              return (\(e:es) -> f e : g es)
 
+{-
+
+    f :: S1 -> S2 -> T                                 f' = g(e)
+    f = g e                         ==>                f(x1,x2) { return f'.enter(x1,x2) }
+
+    -----------
+
+    f :: \/a . S1 -> S2 -> T
+    f = /\a -> g e                  ==>                f[a](x,x2) { return g(e).enter(x1,x2) }
+    
+    -----------
+
+    f :: \/a . S1 -> S2 -> T
+    f = /\a -> \x -> g e            ==>                f[a](x,x2) { return g(e).enter(x2) }
+    
+-}
 
 -- Translate a Core.Exp into a Kindle command, a return type, a type abstraction, and an argument list of given length
 cFunT env vs0 ts0 t0 e                  = do (vs,te,t,c) <- cFun0 env e
                                              let s = vs0 `zip` map Kindle.tVar vs
-                                                 ts1 = subst s ts0
-                                                 t1 = subst s t0
-                                             (te,t,c) <- adaptFun env ts1 t1 te t c
-                                             if rng te /= ts1 then tr ("#### cFunT mismatch #####") else return ()
-                                             return (vs, te, t, c)
+                                             cFunT' env vs (subst s ts0) (subst s t0) te t c
 
-adaptEnv env [] []                      = return (id, [])
-adaptEnv env (s:ss) ((x,t):te)
-  | s == t                              = do (bf,se) <- adaptEnv env ss te
-                                             return (bf, (x,s):se)
-  | otherwise                           = do y <- newName tempSym
-                                             f <- adaptVal env [] t [] s
-                                             -- tr ("** adapting " ++ render (pr s) ++ " *to* " ++ render (pr t))
-                                             (bf,se) <- adaptEnv env ss te
-                                             return (Kindle.cBind [(x,Kindle.Val t (f (Kindle.EVar y)))] . bf, (y,s):se)
+cFunT' env [] ss s [] t (Kindle.CRet e) = do x <- newName tempSym
+                                             (te',t',c') <- adaptFun env ss s [] t (Kindle.CRet (Kindle.EVar x))
+                                             return (Kindle.cBind [(x,Kindle.Val t e)], [], te', t', c')
+cFunT' env [] ss s [] t c               = do f <- newName functionSym
+                                             (bf,vs,te',t',c') <- cFunT' env [] ss s [] t (Kindle.CRet (Kindle.ECall f [] []))
+                                             return (Kindle.cBind [(f,Kindle.Fun [] t [] c)] . bf, vs, te', t', c')
+cFunT' env vs ss s te t c               = do (te',t',c') <- adaptFun env ss s te t c
+                                             return (id, vs, te', t', c')
+
 
 adaptFun env ss s te t c
   | s:ss == t:rng te                    = return (te, t, c)
@@ -342,6 +352,17 @@ adaptFun env ss s te t c
   where l_ss                            = length ss
         l_te                            = length te
         (tss,t')                        = splitClosureType env (l_ss - l_te) t
+
+
+adaptEnv env [] []                      = return (id, [])
+adaptEnv env (s:ss) ((x,t):te)
+  | s == t                              = do (bf,se) <- adaptEnv env ss te
+                                             return (bf, (x,s):se)
+  | otherwise                           = do y <- newName tempSym
+                                             f <- adaptVal env [] t [] s
+                                             -- tr ("** adapting " ++ render (pr s) ++ " *to* " ++ render (pr t))
+                                             (bf,se) <- adaptEnv env ss te
+                                             return (Kindle.cBind [(x,Kindle.Val t (f (Kindle.EVar y)))] . bf, (y,s):se)
 
         
 
@@ -410,7 +431,9 @@ cFun env e@(EAct _ _)                   = cAct env id id e
 cFun env e@(EAp e0 _) 
   | isPrim After e0 || isPrim Before e0 = cAct env id id e
 cFun env (ETempl x tx0 te0 c)           = do (t,c) <- cCmd (pushSelf x (addATEnv [(x,Kindle.tRef tx)] (addTEnv te env))) c
-                                             addToStore (n, Kindle.Struct vs te Kindle.Top)
+                                             store <- currentStore
+                                             if n `elem` dom store then return () else
+                                                addToStore (n, Kindle.Struct vs te Kindle.Top)
                                              y <- newName dummySym
                                              let e = Kindle.ENew (prim Ref) [tx] [(prim STATE, Kindle.Val tx (Kindle.ENew n ts []))]
                                              return ([(y,Kindle.tInt)], t, Kindle.cBind [(x,Kindle.Val (Kindle.tRef tx) e)] c)
@@ -738,11 +761,20 @@ stateRef env                            = Kindle.ESel (Kindle.EVar (self env)) (
 -- Translating expressions
 -- =========================================================================================
 
+rename1 (Binds r te eqs) e              = do s <- mapM f xs
+                                             let s' = mapSnd EVar s
+                                             return (Binds r (rng s `zip` ts) (subst s ys `zip` subst s' es), subst s' e)
+  where (xs,ts)                         = unzip te
+        (ys,es)                         = unzip eqs
+        f x                             = do n <- newNum
+                                             return (x, x {tag = n})
+
 -- Translate a Core.Exp into an expression result that is either a value or a function,
 -- overflowing into a list of Kindle.Binds if necessary
 cExp env (ELet bs e)
   | isTAppEncoding bs                   = cExp (setTArgs env (map cAType (tAppTypes bs))) e
-  | not (isTAbsEncoding bs)             = do (te,bf) <- cBinds env bs
+  | not (isTAbsEncoding bs)             = do (bs,e) <- rename1 bs e
+                                             (te,bf) <- cBinds env bs
                                              (bf',t,h) <- cExp (addTEnv te env) e
                                              return (bf . bf', t, h)
 cExp env (ELit l)                       = return (id, Kindle.litType l, ValR (Kindle.ELit l))

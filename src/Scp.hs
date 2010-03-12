@@ -14,13 +14,32 @@ import Debug.Trace (trace)
 import Char (ord, chr)
 import Control.Monad (mapAndUnzipM)
 
-type Context = Exp -> Exp
+type InExp = Exp -- _Before_ transformation
+
+type OutExp = Exp -- _After_ transformation
+    
+type Context = [CFrame]
+
+data CFrame = AppCtxt [InExp]
+            | PrimOpCtxt [OutExp] [InExp] -- We need this to return conveniently to the primop
+            | CaseCtxt [Alt Exp]
+            | SelCtxt Name
+              deriving Show
 
 emptyContext :: Context
-emptyContext = \hole -> hole
+emptyContext = []
 
+data RhoElement = RhoE {
+      freshName :: Name,
+--      inFvs :: [Var],
+      restExp :: Context,
+      headExp :: Exp,
+      compTerm :: Exp,
+      compSize :: Integer
+}
+               
 data ScpEnv = ScpE {
-      ctxt :: Context,
+      hasH :: Bool,
       locEqns :: Eqns,
       locTEnv :: TEnv,
       globEqns :: Eqns,
@@ -30,7 +49,7 @@ data ScpEnv = ScpE {
       ls :: Eqns
     }
 
-env0 = ScpE { ctxt = emptyContext, 
+env0 = ScpE { hasH = False,
                      locEqns = [], locTEnv = [], 
                      globEqns = [], globTEnv = [],
                      inSet = [], splitVars = [], ls = [] }
@@ -71,12 +90,132 @@ scpBinds' env (Binds r te' eqns)   = do
                 return ()
               else do
                 tr ("Driving " ++ show' n ++ " = " ++ show' e)
---                tr ("Globeqns: " ++ show impEqns)
-                (e', used) <- drive env e
+--                tr ("Globeqns: " ++ show (globEqns env))
+                (e', used) <- drive env e emptyContext
                 tr ("Done driving " ++ show' e')
                 addToStore (Nothing, thist, n, e')
                 return ()
 
+drive :: ScpEnv -> Exp -> Context -> M (Maybe Exp, Scheme, Name, Exp) (Exp, [(Name, Maybe Exp)])
+
+drive env (ELit l@(LStr _ _)) ((CaseCtxt alts):c) = do
+  tr ("driveCaseStrLit!")
+  driveCaseStrLit env l c alts
+drive env (ELit l) ((CaseCtxt alts):c) = do
+  drive env (findLit l alts) c
+drive env l@(ELit _) context@((PrimOpCtxt oes []):c) | all value oes = do
+  case redPrim (oes ++ [l]) of
+    Nothing -> build env l context
+    Just e -> drive env e c
+
+drive env (EVar (Prim Refl _)) ((AppCtxt [arg]):c) = drive env arg c
+drive env (EVar (Prim Match _)) ((AppCtxt [EAp (EVar (Prim Commit _)) [arg]]):c) =
+  drive env arg c
+drive env (EVar (Prim Match _)) ((AppCtxt [EVar (Prim Fail n)]):c) = 
+  return (EAp (EVar (Prim Raise n)) [ELit (lInt 1)], [])
+drive env (EVar (Prim Fatbar _)) ((AppCtxt [(EVar (Prim Fail _)), e2]):c) = 
+  drive env e2 c
+drive env (EVar (Prim Fatbar _)) ((AppCtxt [e1, (EVar (Prim Fail _))]):c) = 
+  drive env e1 c
+drive env (EVar (Prim Fatbar _)) ((AppCtxt [l@(EAp (EVar (Prim Commit _)) [arg]), _]):c) = 
+  drive env l c
+drive env (EVar (Prim LazyAnd _)) ((AppCtxt [ECon (Prim TRUE _), e2]):c) =
+  drive env e2 c
+drive env (EVar (Prim LazyAnd a)) ((AppCtxt [ECon (Prim FALSE _), e2]):c) = do
+  n <- newName "x"
+  t <- newTvar Star
+  let body = ELet (Binds False [(n, scheme t)] [(n, e2)]) (eBool False)
+  drive env body c
+drive env (EVar (Prim LazyAnd a)) ((AppCtxt [e1, ECon (Prim TRUE _)]):c) =
+  drive env e1 c
+drive env (EVar (Prim LazyAnd a)) ((AppCtxt [e1, ECon (Prim FALSE _)]):c) = do
+  n <- newName "x"
+  t <- newTvar Star
+  let body = ELet (Binds False [(n, scheme t)] [(n, e1)]) (eBool False)
+  tr ("New lazyAnd body:" ++ show' body)
+  drive env body c
+drive env (EVar (Prim LazyOr a)) ((AppCtxt [e1, e2]):c) = error ("vojne" ++ show e1 ++ show e2)
+drive env (EVar v@(Prim _ _)) context@((AppCtxt _):_) = do
+  let (e, context') = makePrimOpCtxt v context
+  drive env e context'
+drive env (EVar v) context
+ | Just body <- maybeInline env v = do
+  maybeFold env v context body
+ | otherwise = build env (EVar v) context
+
+drive env (ECon n) ((CaseCtxt alts):c) =  drive env (findCon n alts) c
+drive env (ECon n) ((AppCtxt args):(CaseCtxt alts):context)
+ | (ELam te' e) <- findCon n alts = do
+  let e' = ELet (Binds False te' (zip (dom te') args)) e
+  tr ("ECon case" ++ show' e')
+  drive env e' context
+ | e <- findCon n alts = do
+  tr ("ECon case FEL" ++ show' e)
+  vs <- newNames "x" (length args)
+  ts <- newTvars Star (length args)
+  let e' = ELet (Binds False (zip vs (map scheme ts)) (zip vs args)) e
+  drive env e' context
+
+drive env (ERec nam eqs) ((SelCtxt n):c) = do
+  let e = head [e | (n', e) <- eqs, n == n']
+  drive env e c
+
+drive env (ELet (Binds _ _ []) body) c = drive env body c
+drive env l@(ELet b@(Binds True te eqs) body) c = tr' ("eqs: " ++ (show (dom eqs)) ++ "\n" ++ concat (map show' (rng eqs))) $
+  drive (env {locEqns = eqs ++ locEqns env, locTEnv = te ++ locTEnv env}) body c
+drive env l@(ELet (Binds False (te':te'') ((n, e):t)) b) c = do
+  tr ("nonrec bind" ++ show' l)
+  tr ("nonrec' bind:" ++ show' (plug c l))
+  -- XXXpj: linear 
+  if strict n b || value e || terminates env e
+     then drive env (ELet (Binds False te'' t) (subst (n +-> e) b)) c
+     else do
+         tr ("nonval: " ++ show' l)
+         (e', used) <- drive env e emptyContext
+         tr ("e': " ++ show' e')
+         let exp = ELet (Binds False te'' t) b
+         (rest, used') <- drive (env {inSet = te':inSet env }) exp c
+         let ret = ELet (Binds False [te'] [(n, e')]) rest
+         return (ret, used' ++ used)
+
+
+drive env (ELam te e) ((AppCtxt args):c) = 
+  drive env (ELet (Binds False te (zip (dom te) args)) e) c
+drive env (ELam te e) c = do
+  (e', used') <- drive env e emptyContext
+  (e'', used'') <- build env (ELam te e') c
+  return (e'', used' ++ used'')
+
+drive env (EAp e args) c = drive env e ((AppCtxt args):c)
+
+drive env (ECase e alts) c = drive env e ((CaseCtxt alts):c)
+
+drive env (ESel e n) c = drive env e ((SelCtxt n):c)
+
+drive env (EAct e1 e2) c = do
+  (e1', used1') <- drive env e1 emptyContext
+  (e2', used2') <- drive env e2 emptyContext
+  (e', used') <- build env (EAct e1' e2') c
+  return (e', used' ++ used1' ++ used2')
+drive env (EReq e1 e2) c = do
+  (e1', used1') <- drive env e1 emptyContext
+  (e2', used2') <- drive env e2 emptyContext
+  (e', used') <- build env (EReq e1' e2') c
+  return (e', used' ++ used1' ++ used2')
+drive env e@(ETempl n t te cmd) c = do
+  (cmd', used') <- driveCmd (env {inSet = te ++ inSet env}) cmd
+  tr ("Skickar in: " ++ show' cmd)
+  (e', used'') <- build env (ETempl n t te cmd') c
+  tr ("Fick ut :" ++ show' e')
+  return (e', used'' ++ used')
+drive env e@(EDo n t cmd) c = do
+  (cmd', used') <- driveCmd env cmd
+  (e', used'') <- build env (EDo n t cmd') c
+  return (e', used'' ++ used')
+
+drive env e c = do
+ build env e c
+{-                       
 drive :: ScpEnv -> Exp -> M (Maybe Exp, Scheme, Name, Exp) (Exp, [(Name, Maybe Exp)])
 -- R1
 drive env l@(ELit _) = return (ctxt env $ l, [])
@@ -320,37 +459,30 @@ driveLegCtxtDown env (Alt PWild e) = do
 --   tr ("Leg: " ++ show' freshE)
   (e', used) <- drive (env {ctxt = emptyContext}) freshE
   return (Alt PWild e', used)
+-}
 
-driveApp :: ScpEnv -> Exp -> Maybe [Exp] -> M (Maybe Exp, Scheme, Name, Exp) (Exp, [(Name, Maybe Exp)])
-driveApp env (EVar n) args 
-  | Just body <- maybeInline env n = do
+driveApp :: ScpEnv -> Name -> Context -> Exp -> M (Maybe Exp, Scheme, Name, Exp) (Exp, [(Name, Maybe Exp)])
+driveApp env fun context body
+  | Just body <- maybeInline env fun = do
       memo <- currentStore
-      let l = case args of
-                   Nothing -> (EVar n)
-                   Just args' -> EAp (EVar n) args'
-      let l' = ctxt env $ l
+      let l' = plug context (EVar fun)
           nont = homemb (locEqns env ++ globEqns env) (ls env) memo l'
       tr ("driveApp: " ++ show' l')
+      tr ("driveApp2:" ++ show (plug context body))
 --      tr ("driveApp: " ++ show (ls env))
       if not $ null nont
         then do
            tr ("Whistle: " ++ show' l')
 --           tr ("Exp: " ++ show' l)
            tr ("Whistle mot: " ++ show' (head nont))
-           ret <- haveWhistled nont l
-           return ret
+           haveWhistled nont l' fun
         else do
 --           tr ("Not homemb: " ++ show' l')
 --           tr ("ls: " ++ concat (map show' (map snd (ls env))))
            fname <- newName "h"
            body' <- alphaConvert body
-           let newterm = ctxt env $ case args of
-                                      Nothing -> body'
-                                      Just args' -> EAp body' args'
-               env' = env { ls = (fname, l'):ls env, 
-                            ctxt = emptyContext }
---           tr ("Renamad term:" ++ show newterm)
-           (e', used) <- drive env' newterm
+           let env' = env { ls = (fname, l'):ls env }
+           (e', used) <- drive env' body' context
            let w = [e | (n, Just e) <- used, fname == n]
                found = [n | (n, Nothing) <- used, fname == n]
            if not $ null w
@@ -370,13 +502,13 @@ driveApp env (EVar n) args
                           xs' = map EVar xs
                       newbody <- alphaConvert $ case null fvs of
                                                   True -> e'
-                                                  False -> subst (zip fvs xs') (ELam (zip xs schemes) e')
+                                                  False -> ELam (zip xs schemes)(subst (zip fvs xs') e')
                       let newterm = case null fvs of
                                       True -> EVar fname
                                       False -> EAp (EVar fname) params
 --                      tr ("Foldar, kropp: " ++ show newbody)
 --                      tr ("Foldar, fv: " ++ show fvs)
-                      tr ("Foldar: " ++ show' l' ++ show fname)
+                      tr ("Foldar: " ++ show' l' ++ " to " ++ show fname)
                       tr ("New body:" ++ show' newbody)
 --                      tr ("Adding': " ++ show (fname, fscheme))
                       case null bodyfvs of
@@ -387,13 +519,14 @@ driveApp env (EVar n) args
                           let ret = ELet (Binds True [(fname, fscheme)] [(fname, newbody)]) newterm
                           return (ret, used)
                     else return (e', used)
-      where haveWhistled nont l = do
+      where haveWhistled nont l' fun = do
               ml <- currentStore
-              let l' = ctxt env $ l
+              let 
                   gf = locEqns env ++ globEqns env
                   refl = [(n, e) | (n, e) <- nont, isHomemb gf l' e]
               if not $ null refl
                  then do
+                   error "Backtracking, crap"
                    ret <- newName "intermediate_name"
                    return (EVar ret, [(fst . head $ refl, Just l')])
                  else do
@@ -401,25 +534,67 @@ driveApp env (EVar n) args
                    ret <- gen env l' (snd . head $ nont)
 --                   tr ("haveWhistled: " ++ show' (fst ret))
                    return ret
-                   
 
-maybeFold env (EVar n) args = do
+  
+
+plug [] e = e
+plug ((AppCtxt args):c) e = plug c (EAp e args)
+plug ((PrimOpCtxt oes ies):c) e = plug c (EAp (head oes) (tail oes ++ e:ies))
+plug ((CaseCtxt alts):c) e = plug c (ECase e alts)
+plug ((SelCtxt n):c) e = plug c (ESel e n)
+
+makePrimOpCtxt v ((AppCtxt args):c) = (head args, (PrimOpCtxt [EVar v] (tail args)):c)
+
+{-
+splitCaseCtxt _ [] = Nothing
+splitCaseCtxt e ((AppCtxt args):c) = splitCaseCtxt (EAp e args) c
+splitCaseCtxt _ ((PrimOpCtxt {}):_) = Nothing
+splitCaseCtxt e c@((CaseCtxt {}):_) = Just (e, c)
+splitCaseCtxt e ((SelCtxt _):_) = Nothing
+-}
+
+maybeFold env fun myctxt e = do
   memo <- currentStore
-  let e = case args of
-            Nothing -> EVar n
-            Just args' -> EAp (EVar n) args'
-  let l' = ctxt env $ e
+  let l' = plug myctxt (EVar fun)
       res = renamings (locEqns env ++ globEqns env) (ls env) memo l'
   if not $ null res
     then do
---         tr ("Folding: " ++ show' l')
+      tr ("Folding: " ++ show' l')
       let n' = head res
           fvs = fv env l'
           params = map EVar fvs
           newterm = if null fvs then EVar n' else EAp (EVar n') params
 --         tr ("Folding, fvs: " ++ show n' ++ " " ++ show fvs)
       return (newterm, [(n', Nothing)])
-    else driveApp env (EVar n) args
+    else driveApp env fun myctxt e
+
+driveAlt env c (Alt p e) = do
+  (e', used') <- drive (env {inSet = findBs p ++ inSet env}) e c
+  return (Alt p e', used')
+
+findBs (PCon _ te) = te
+findBs _ = []
+
+build env e ((PrimOpCtxt oes ies):c)
+ | hasH env = do
+  (ies', used) <- mapAndUnzipM (\e -> drive (env {hasH = False}) e emptyContext) ies
+  (e', used') <- build (env {hasH = False}) (EAp (head oes) (tail oes ++ e:ies')) c
+  return (e', used' ++ concat used)
+ | null ies = build env (EAp (head oes) (e:tail oes)) c
+ | otherwise = drive env (head ies) ((PrimOpCtxt (oes ++ [e]) (tail ies)):c)
+build env e ((AppCtxt args):c) = do
+  (args', used') <- mapAndUnzipM (\e -> drive env e emptyContext) args
+  (e', used'') <- build (env {hasH = True}) (EAp e args') c
+  return (e', used'' ++ concat used')
+build env e@(EVar v) context@((CaseCtxt alts):c) = do
+  -- XXXpj: Substa konstrueraren
+  (alts', used') <- mapAndUnzipM (driveAlt env c) alts
+  return (ECase e alts', concat used')
+build env e context@((CaseCtxt alts):c) = do
+  (alts', used') <- mapAndUnzipM (driveAlt env c) alts
+  return (ECase e alts', concat used')
+build env e ((SelCtxt n):c) = build env (ESel e n) c
+build _ e [] = return (e, [])
 
 gen env e1 e2 = do
 --  tr ("Generalize : \n" ++ show' e1 ++ " vs\n" ++ show' e2)
@@ -429,13 +604,15 @@ gen env e1 e2 = do
                    EVar n -> split' e1
                    _ -> return res
   let (ns, exps) = unzip s'
-      env' = env {ctxt = emptyContext, inSet = zip ns ts' ++ inSet env,
+      env' = env { -- ctxt = emptyContext,
+                 inSet = zip ns ts' ++ inSet env,
                  splitVars = ns ++ splitVars env}
   tr ("msg ground: " ++ show' term)
   tr ("msg subst: " ++ concat (map show' exps))
-  (term', used) <- drive env' term
+  (term', used) <- drive env' term emptyContext
 --  tr ("msg groundD: " ++ show' term')
-  (exps', used') <- mapAndUnzipM (drive (env {ctxt = emptyContext, splitVars = ns ++ splitVars env})) exps
+--  (exps', used') <- mapAndUnzipM (drive (env {ctxt = emptyContext, splitVars = ns ++ splitVars env})) exps
+  (exps', used') <- mapAndUnzipM (\e -> drive (env {splitVars = ns ++ splitVars env}) e emptyContext) exps
 --  tr ("gen0: " ++ show term)
 --  tr ("gen1: " ++ show exps)
 --  tr ("gen2: " ++ show exps')
@@ -517,22 +694,24 @@ maybeInline env n
 
 driveCmd env (CGen n t e c) = do
   tr ("CGen: " ++ show n ++ " = " ++ show' e)
-  (e', used') <- drive env e
+  (e', used') <- drive env e emptyContext
   (c', used'') <- driveCmd env c
   return (CGen n t e' c', used' ++ used'')
 driveCmd env (CAss n e c) = do
   tr ("CAss: " ++ show n ++ " = " ++ show' e)
-  (e', used') <- drive env e
+  (e', used') <- drive env e emptyContext
   tr ("CAss: drivad: " ++ show' e')
   (c', used'') <- driveCmd env c
   return (CAss n e' c', used' ++ used'')
 -- Non-recursive monadic let
 driveCmd env (CLet (Binds False te eqs) c) = do
   let (names, eqs') = unzip eqs
-      env' = env {ctxt = emptyContext, inSet = te ++ inSet env}
+      env' = env {inSet = te ++ inSet env}
+--      env' = env {ctxt = emptyContext, inSet = te ++ inSet env}
   tr ("CLet: " ++ show names)
-  (exps, used') <- mapAndUnzipM (drive env') eqs'
+  (exps, used') <- mapAndUnzipM (\e -> drive env' e emptyContext) eqs'
   let eqs' = zip names exps
+  -- XXXpj: GLOM INTE EMPTYCONTEXT
   (c', used) <- driveCmd env' c
   return (CLet (Binds False te eqs') c', used ++ concat used')
 driveCmd env (CLet bs c) = do
@@ -543,12 +722,13 @@ driveCmd env (CLet bs c) = do
   return (CLet bs c', used'')
 driveCmd env (CRet e) = do
   tr ("CRet: " ++ show' e)
-  (e', used') <- drive env e
+  (e', used') <- drive env e emptyContext
   return (CRet e', used')
 driveCmd env (CExp e) = do
   tr ("CExp: " ++ show' e)
-  (e', used') <- drive env e
+  (e', used') <- drive env e emptyContext
   return (CExp e', used')
+driveCmd env (CCase e alts) = error "driveCmd: cCase"
 
 --homemb :: Eqns -> Eqns -> Eqns -> Exp -> Eqns
 homemb gf ls ml exp = hembsM ++ hembsL
@@ -973,8 +1153,8 @@ eBool False = ECon (prim FALSE)
 
 
 findCon k (Alt PWild e:_)  = e
-findCon k (Alt (PCon k' _) e:_)
-  | k == k'                     = e
+findCon k (Alt (PCon k' te) e:_)
+  | k == k'                     = ELam te e
 findCon k (_:alts)       = findCon k alts
 
 
@@ -984,17 +1164,19 @@ findLit l (Alt (PLit l') e:_)
 findLit l (_:alts)          = findLit l alts
 findLit _ p = error (show p)
 
-driveCaseStrLit env l (Alt PWild e:_) = drive (env {ctxt = emptyContext}) (ctxt env $ e)
-driveCaseStrLit env l (Alt (PLit l') e:_)
-  | l == l'                     = drive (env {ctxt = emptyContext}) (ctxt env $ e)
-driveCaseStrLit env (LStr _ "") (Alt (PCon (Prim NIL _) []) e:alts) = drive (env {ctxt = emptyContext}) (ctxt env $ e)
-driveCaseStrLit env (LStr _ str) alts@(Alt (PCon (Prim CONS _) _) e:_) = do
+              
+driveCaseStrLit env l c (Alt PWild e:_) = drive env e c
+driveCaseStrLit env l c (Alt (PLit l') e:_) | l == l' = drive env e c
+driveCaseStrLit env (LStr _ "") c (Alt (PCon (Prim NIL _) []) e:alts) = do
+  drive env e c
+driveCaseStrLit env (LStr _ str) c alts@(Alt (PCon (Prim CONS _) _) e:_) = do
   let nil = ECon (prim NIL)
       cons = ECon (prim CONS)
       chr x = ELit (LChr Nothing x)
       e' = foldr (\x y -> EAp cons [chr x, y]) nil str
-  drive env (ECase e' alts)
-driveCaseStrLit env l (_:alts) = driveCaseStrLit env l alts
+  drive env (ECase e' alts) c
+driveCaseStrLit env l c (_:alts) = driveCaseStrLit env l c alts
+
 
 normLit (LInt p i)
   | i >= 0x80000000             = normLit (LInt p (i - 0x100000000))
@@ -1007,6 +1189,8 @@ reducible CharToInt              = True
 reducible IntToFloat             = True
 reducible IntToChar              = True
 reducible op                     = tr' ("Not reducible: " ++ show op) False
+
+redPrim (op:t) = error ("redPrim not done:")
 
 redChar1 CharToInt x             = ELit (lInt (ord x))
 redChar1 p _                     = internalError0 ("Scp.redChar1: unknown primitive " ++ show p)

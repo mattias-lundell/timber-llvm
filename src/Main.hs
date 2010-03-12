@@ -232,7 +232,7 @@ compileTimber clo ifs (sm,t_file) ti_file c_file h_file llvm_file
 pass clo m p a          = do -- tr ("Pass " ++ show p ++ " ...")
                              r <- m a
                              Monad.when (dumpAfter clo p) 
-                                $ tr ("#### Result after " ++ show p ++ ":\n\n" ++ render (pr r))
+                                $ tr ("#### Result after " ++ show p ++ ":\n\n") -- ++ render (pr r))
                              Monad.when (stopAfter clo p)
                                 $ fail ("#### Terminated after " ++ show p ++ ".")
                              return r                  
@@ -246,13 +246,15 @@ makeProg clo cfg root   = do txt <- readFile (root ++ ".t")
                              ifs <- compileAll (clo {shortcut = True}) [] ps
                              r <- checkRoot clo ifs root
                              let basefiles  = map (rmSuffix ".t" . snd) ps
-                                 --c_files   = map (++ ".c") basefiles
-                                 --o_files   = map ((++ ".o") . rmDirs) basefiles
+                                 c_files    = map (++ ".c") basefiles
                                  o_files    = map ((++ ".o") . rmDirs) basefiles
+                                 bc_files   = map ((++ ".bc") . rmDirs) basefiles
                                  ll_files   = map (++ ".ll") basefiles
                              --mapM (compileC cfg clo) c_files
-                             mapM (compileLLVM cfg clo) ll_files
-                             linkO cfg clo{outfile = root} r o_files
+                             mapM (compile cfg clo) ll_files
+                             --linkO cfg clo{outfile = root} r o_files
+                             --tr "aaaaaaaaaaaaaaaaaaaaaa---------------------aaaaaaaaaaaaaaa"
+                             link cfg clo{outfile = root} r bc_files
   where nonDummy (_,(_,Syntax.Module n _ _ _)) = str n /= ""
 
 
@@ -353,6 +355,7 @@ main2 args          = do (clo, files) <- Exception.catch (cmdLineOpts args)
                          let t_files  = filter (".t"  `isSuffixOf`) files
                              i_files  = filter (".ti" `isSuffixOf`) files
                              o_files  = filter (".o" `isSuffixOf`) files
+                             bc_files = filter (".bc" `isSuffixOf`) files
                              badfiles = files \\ (t_files++i_files++o_files)
                          
                          Monad.when (not (null badfiles)) $ do
@@ -372,13 +375,15 @@ main2 args          = do (clo, files) <- Exception.catch (cmdLineOpts args)
                              c_files   = map (++ ".c") basefiles
                              ll_files   = map (++ ".ll") basefiles
                          --mapM (compileC cfg clo) c_files
-                         mapM (compileLLVM cfg clo) ll_files
+                         mapM (compile cfg clo) ll_files
                          Monad.when (stopAtO clo) stopCompiler
 
                          let basenames = map rmDirs basefiles
-                             o_files'   = map (++ ".o") basenames
+                             o_files'  = map (++ ".o") basenames
+                             bc_files' = map (++ ".bc") basenames
                          Monad.when(not (null basenames)) (do r <- checkRoot clo ifs (last basenames)
-                                                              linkO cfg clo r (o_files ++ o_files'))
+                                                              --linkO cfg clo r (o_files ++ o_files')
+                                                              link cfg clo r (bc_files ++ bc_files'))
 
                          return ()
 

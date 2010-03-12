@@ -1,4 +1,4 @@
-{-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, DeriveDataTypeable #-}
+{-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, DeriveDataTypeable, OverlappingInstances, FlexibleContexts #-}
 
 -- The Timber compiler <timber-lang.org>
 --
@@ -100,6 +100,8 @@ zipFilter (f:fs) (x:xs)
   | f                           = x : zipFilter fs xs
   | otherwise                   = zipFilter fs xs
 zipFilter _ _                   = []
+
+zip4                            = List.zip4
                                     
 noDups mess vs
   | not (null dups)             = errorIds mess dups
@@ -232,10 +234,11 @@ instance Show Lit where
     show (LStr _ s)             = "LStr " ++ show s
     
 instance Pr Lit where
-    pr (LInt p i)                 = integer i
-    pr (LRat _ r)                 = rational r
-    pr (LChr _ c)                 = litChar c
-    pr (LStr _ s)                 = litString s
+    prn _ (LInt _ i)            = integer i
+    prn 0 (LRat _ r)            = rational r
+    prn _ (LRat _ r)            = parens (rational r)
+    prn _ (LChr _ c)            = litChar c
+    prn _ (LStr _ s)            = litString s
 
 
 instance HasPos Lit where
@@ -508,9 +511,17 @@ substVar s x                    = case lookup x s of
                                     Nothing -> x
 
 
+instance Subst Name Name Name where
+    subst s x                           = case lookup x s of
+                                            Just x' -> x'
+                                            _       -> x
+
 instance Subst a i e => Subst [a] i e where
     subst [] xs                 = xs
     subst s xs                  = map (subst s) xs
+
+instance Subst a Name Name => Subst (Name,a) Name Name where
+    subst s (v,a)               = (subst s v, subst s a)
 
 instance Subst a i e => Subst (Name,a) i e where
     subst s (v,a)               = (v, subst s a)

@@ -3,6 +3,7 @@ CfgOpts
       , llvmLLVMAS = "llvm-as "
       , llvmLLC = "llc "
       , llvmAS = "as "
+      , llvmLD = "llvm-link "
       , compileFlags = " @CFLAGS@ "
       , linkFlags = " @LDFLAGS@ "
       , linkLibs = " -lTimber "
