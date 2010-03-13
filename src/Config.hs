@@ -88,6 +88,7 @@ data CfgOpts         = CfgOpts { cCompiler       :: FilePath,
                                  llvmLLC         :: FilePath,
                                  llvmAS          :: FilePath,
                                  llvmLD          :: FilePath,
+                                 llvmOPT         :: FilePath,
                                  compileFlags    :: String,
                                  linkFlags       :: String,
                                  linkLibs        :: String

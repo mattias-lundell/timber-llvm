@@ -67,15 +67,15 @@ k2llvmAddExternals binds = mapM_ f binds
 -- Add struct binds
 k2llvmStructDecls sdecls = mapM_ f sdecls
     where 
-      f (sname, (Struct _ vars _)) = do 
+      f (sname, Struct _ vars _) = do 
         let sname' = k2llvmName sname
             vars' = fixvars sname' vars
         addStruct sname' vars'
       fixvars _ [] = []
-      fixvars sname ((name,ValT typ):rest) = 
-          (k2llvmName name,k2llvmType typ) : fixvars sname rest
-      fixvars sname ((name,FunT _ argtyps restyp):rest) = 
-          (k2llvmName name, (Tptr (Tfun (k2llvmType restyp) (Tptr (Tstruct sname):map k2llvmType argtyps)))):fixvars sname rest
+      fixvars sname ((name, ValT typ) : rest) = 
+          (k2llvmName name, k2llvmType typ) : fixvars sname rest
+      fixvars sname ((name, FunT _ argtyps restyp) : rest) = 
+          (k2llvmName name, Tptr (Tfun (k2llvmType restyp) (Tptr (Tstruct sname) : map k2llvmType argtyps))) : fixvars sname rest
 
 -- Harvest all functions from the current file
 k2llvmHarvestFunTypes binds = mapM_ f binds
@@ -163,7 +163,7 @@ k2llvmValBinds (_,binds) = mapM_ f binds >> mapM_ g binds
                 name = k2llvmName vname
             size <- getStructSize (dropPtrs typ)            
             var <- lookupVar name           
-            r1 <- codeGenNew'' var typ size
+            r1 <- codeGenNew' var typ size
             addVariableToScope name r1
           f (vname, Val vtyp (ECast _ (ENew ntyp [] binds))) = do
             let objtyp = k2llvmType vtyp
@@ -174,11 +174,11 @@ k2llvmValBinds (_,binds) = mapM_ f binds >> mapM_ g binds
             case var of
               Just reg -> do
                        size <- getStructSize castyp
-                       r1 <- codeGenNew'' (Just reg) (ptr castyp) size
+                       r1 <- codeGenNew' (Just reg) (ptr castyp) size
                        return ()
               Nothing -> do
                 size <- getStructSize castyp
-                r1 <- codeGenNew'' Nothing (ptr castyp) size
+                r1 <- codeGenNew' Nothing (ptr castyp) size
                 r2 <- bitcast (ptr objtyp) r1
                 addVariableToScope vname' r2
           f (vname, Val vtyp exp0) = do
@@ -250,7 +250,7 @@ bindGCINFO r0 typ exp = do
             store r2 r3 
 
 atenv2params :: ATEnv -> CGState [(String,LLVMType)]
-atenv2params ps = return [((k2llvmName v),k2llvmType typ) | (v,typ) <- ps]
+atenv2params ps = return [(k2llvmName v, k2llvmType typ) | (v,typ) <- ps]
                
 lit2value (LInt _ n) = return $ intConst n
 lit2value (LChr _ c) = return $ LLVMConstant char (CharConst c)
@@ -258,7 +258,7 @@ lit2value (LRat _ r) = return $ floatConst r
 lit2value (LStr _ s) = genStr s
 
 genStringSwitch _ _ end [] = br end
-genStringSwitch m typ end ((ALit lit cmd):alts) = do
+genStringSwitch m typ end (ALit lit cmd : alts) = do
   n <- lit2value lit
   l1 <- getNextLabel
   l2 <- getNextLabel
@@ -268,13 +268,13 @@ genStringSwitch m typ end ((ALit lit cmd):alts) = do
   br end
   label l2
   genStringSwitch m typ end alts
-genStringSwitch m typ end ((AWild cmd):alts) = do
+genStringSwitch m typ end (AWild cmd : alts) = do
   codeGenCmd cmd
   genStringSwitch m typ end alts
 
 
 genIntSwitch _ _ end [] = br end
-genIntSwitch m typ end ((ALit lit cmd):alts) = do
+genIntSwitch m typ end (ALit lit cmd : alts) = do
   n <- lit2value lit
   l1 <- getNextLabel
   l2 <- getNextLabel
@@ -284,12 +284,12 @@ genIntSwitch m typ end ((ALit lit cmd):alts) = do
   br end
   label l2
   genIntSwitch m typ end alts
-genIntSwitch m typ end ((AWild cmd):alts) = do
+genIntSwitch m typ end (AWild cmd : alts) = do
   codeGenCmd cmd
   genIntSwitch m typ end alts
 
 genFloatSwitch _ _ end [] = br end
-genFloatSwitch m typ end ((ALit lit cmd):alts) = do
+genFloatSwitch m typ end (ALit lit cmd : alts) = do
   n <- lit2value lit
   l1 <- getNextLabel
   l2 <- getNextLabel
@@ -299,7 +299,7 @@ genFloatSwitch m typ end ((ALit lit cmd):alts) = do
   br end
   label l2
   genFloatSwitch m typ end alts
-genFloatSwitch m typ end ((AWild cmd):alts) = do
+genFloatSwitch m typ end (AWild cmd : alts) = do
   codeGenCmd cmd
   genFloatSwitch m typ end alts
 
@@ -317,7 +317,7 @@ codeGenCmd cmd0 = case cmd0 of
                               let objtyp = (struct (k2llvmName n))
                               refsize <- getStructSize refstruct
                               objsize <- getStructSize objtyp
-                              r1 <- codeGenNew'' Nothing refstruct (refsize+objsize)
+                              r1 <- codeGenNew' Nothing refstruct (refsize+objsize)
                               addVariableToScope (k2llvmName y) r1
                               r2 <- load r1
                               callvoid "INITREF" [r2]
@@ -572,31 +572,31 @@ bitNot exps = do
 
 codeGenECall :: Name -> [Exp] -> CGState LLVMValue
 codeGenECall (Prim name _) exps 
-    | elem name [AND8,AND16,AND32]             = primBin and exps
-    | elem name [OR8,OR16,OR32]                = primBin or exps
-    | elem name [EXOR8,EXOR16,EXOR32]          = primBin xor exps
-    | elem name [SHIFTL8,SHIFTL16,SHIFTL32]    = do
+    | name `elem` [AND8,AND16,AND32]             = primBin and exps
+    | name `elem` [OR8,OR16,OR32]                = primBin or exps
+    | name `elem` [EXOR8,EXOR16,EXOR32]          = primBin xor exps
+    | name `elem` [SHIFTL8,SHIFTL16,SHIFTL32]    = do
           [op1,op2] <- mapM codeGenExp exps
           let bittyp = getTyp op1
           r1 <- zext int op1
           r2 <- shl r1 op2
           trunc bittyp r2
-    | elem name [SHIFTR8,SHIFTR16,SHIFTR32]    = do
+    | name `elem` [SHIFTR8,SHIFTR16,SHIFTR32]    = do
           [op1,op2] <- mapM codeGenExp exps
           let bittyp = getTyp op1
           r1 <- zext int op1
           r2 <- lshr r1 op2
           trunc bittyp r2
-    | elem name [SHIFTRA8,SHIFTRA16,SHIFTRA32] = do
+    | name `elem` [SHIFTRA8,SHIFTRA16,SHIFTRA32] = do
           [op1,op2] <- mapM codeGenExp exps
           let bittyp = getTyp op1
           r1 <- zext int op1
           r2 <- ashr r1 op2
           trunc bittyp r2
-    | elem name [SET8,SET16,SET32]             = bitSet exps
-    | elem name [CLR8,CLR16,CLR32]             = bitClr exps
-    | elem name [TST8,TST16,TST32]             = bitTst exps
-    | elem name [NOT8,NOT16,NOT32]             = bitNot exps
+    | name `elem` [SET8,SET16,SET32]             = bitSet exps
+    | name `elem` [CLR8,CLR16,CLR32]             = bitClr exps
+    | name `elem` [TST8,TST16,TST32]             = bitTst exps
+    | name `elem` [NOT8,NOT16,NOT32]             = bitNot exps
     | otherwise = case name of
                     IntPlus ->  primBin add exps
                     IntMinus -> primBin sub exps
@@ -708,7 +708,7 @@ codeGenECall (Prim name _) exps
                     ListArray  -> mapM codeGenExp exps >>= call "primListArray"
                     IndexArray -> do
                       [_,arr,i] <- mapM codeGenExp exps
-                      getelementptr' poly [intConst 2,i] arr >>= load
+                      getelementptr poly [intConst 2,i] arr >>= load
                     ShowFloat  -> mapM codeGenExp exps >>= call "primShowFloat"
                     SizeArray  -> do
                       [_,arr] <- mapM codeGenExp exps 
@@ -742,13 +742,13 @@ codeGenNew typ size = do
   callvoid "new" [r1,size']
   bitcast (ptr typ) r1
 -}
-codeGenNew'' :: Maybe LLVMValue -> LLVMType -> Int -> CGState LLVMValue
-codeGenNew'' (Just r1) typ size = do
+codeGenNew' :: Maybe LLVMValue -> LLVMType -> Int -> CGState LLVMValue
+codeGenNew' (Just r1) typ size = do
   r2 <- bitcast (ptr $ ptr int) r1
   let size' = intConst (LLVMKindle.words size)
   callvoid "new" [r2,size']
   return r1
-codeGenNew'' Nothing typ size = do
+codeGenNew' Nothing typ size = do
 {-  r1 <- alloca (ptr int)
   let size' = intConst (LLVMKindle.words size)
   callvoid "new" [r1,size']
@@ -786,7 +786,7 @@ initImports ns = mapM f ns
       f n = addExternalFun (fname n) void [] >> callvoid (fname n) []
       fname n = "_init_" ++ modToundSc (str n)
 
-initStructs binds = do mapM_ k2llvmValBinds' (groupMap binds) 
+initStructs binds = mapM_ k2llvmValBinds' (groupMap binds) 
     where     
       k2llvmValBinds' (r,binds) = k2llvmValBinds (r, filter isInitVal binds)
       isInitVal (_,Val _ (ECall (Prim GCINFO _) _ _)) = False

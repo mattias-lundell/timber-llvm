@@ -6,35 +6,17 @@ import LLVM
 
 import Common 
 import Kindle hiding (unit)
---import Common hiding (name, Array)
 import Name hiding (name)
 import Control.Monad.State hiding (get, put)
 import qualified Data.Map as Map
-import Data.List hiding (lookup,words)
-import Prelude hiding (lookup,words)
-
-type Scope = Map.Map String LLVMValue
-
-data CGM = CGM {
-      cgmName     :: String,
---      cgmFuns     :: [LLVMFunctionDef],
-      cgmGlobals  :: [LLVMGlobal],
-      cgmStucts   :: [LLVMStructDef]
-}
-
-data CGF = CGF {
-      cgfName         :: String,
-      cgfEnv          :: Map String LLVMValue,
-      cgfNextRegister :: Integer,
-      cgfNextLabel    :: Integer,
-      cgmCode         :: [LLVMInstruction],
-      cgmAllocs       :: [LLVMValue]
-}
+import Data.List hiding (lookup, words)
+import Prelude hiding (lookup, words)
+import qualified Data.DList as DL
 
 data CodeGenState = CodeGenState {
       cgNextRegister :: Integer,
       cgNextLabel :: Integer,
-      cgTypeEnv :: [Scope],
+      cgTypeEnv :: [Map.Map String LLVMValue],
       cgCurrModuleName :: String,
       cgCurrFunName :: String,
       cgCurrLoopLabel :: [LLVMLabel],
@@ -48,11 +30,8 @@ data CodeGenState = CodeGenState {
       cgStructs :: Map.Map LLVMType (Map.Map String (Int,LLVMType)),
       cgSs      :: [LLVMStructDef],
       cgFs      :: [LLVMFunction],
-      cgCurrF   :: [LLVMInstruction],
-      cgAllocs  :: [LLVMValue]
+      cgCurrF   :: DL.DList LLVMInstruction
 }
-
-
 
 type CGState a = State CodeGenState a
 type Selector a = (CGState a, a -> CGState ())
@@ -68,11 +47,6 @@ globals = (gets cgGlobals, \x ->
 gs :: Selector [LLVMGlobal]
 gs = (gets cgGs, \x -> 
           modify (\vs -> vs {cgGs = x}))
-
-allocs :: Selector [LLVMValue]
-allocs = (gets cgAllocs, \x -> 
-          modify (\vs -> vs {cgAllocs = x}))
-
 
 funs :: Selector (Map.Map String LLVMType)
 funs = (gets cgFuns, \x -> 
@@ -98,7 +72,7 @@ ss :: Selector [LLVMStructDef]
 ss = (gets cgSs, \x -> 
           modify (\vs -> vs {cgSs = x}))
 
-currf :: Selector [LLVMInstruction]
+currf :: Selector (DL.DList LLVMInstruction)
 currf = (gets cgCurrF, \x -> 
                   modify (\vs -> vs {cgCurrF = x}))
 
@@ -118,7 +92,7 @@ structs :: Selector (Map.Map LLVMType (Map.Map String (Int,LLVMType)))
 structs = (gets cgStructs, \x -> 
                modify (\vs -> vs {cgStructs = x}))
 
-typeEnv :: Selector [Scope]            
+typeEnv :: Selector [Map.Map String LLVMValue]            
 typeEnv = (gets cgTypeEnv, \x -> 
                modify (\vs -> vs {cgTypeEnv = x}))
 
@@ -134,24 +108,17 @@ currFunName = (gets cgCurrFunName, \x ->
 -- GETTERS AND SETTERS
 -- =============================================================================
 
+-- used for "continue"-call in a while loop
 getLoopLabel :: CGState LLVMLabel
-getLoopLabel = gets cgCurrLoopLabel >>= return . head
---do
---  labels <- get currLoopLabel
---  return $ head labels
+getLoopLabel = get currLoopLabel >>= return . head
 
 addLoopLabel :: LLVMLabel -> CGState ()
 addLoopLabel lab = modify $ \s -> s { cgCurrLoopLabel = lab : cgCurrLoopLabel s }
---do
---  labels <- get currLoopLabel
---  put currLoopLabel (const (lab:labels))
 
 dropLoopLabel :: CGState ()
 dropLoopLabel = modify $ \s -> s { cgCurrLoopLabel = tail (cgCurrLoopLabel s) }
---do
---  labels <- get currLoopLabel
---  put currLoopLabel (const (tail labels))
 
+-- add strings to toplevel constants
 addString :: String -> CGState ()
 addString s = do
   r <- get nextRegister
@@ -163,26 +130,21 @@ addString s = do
   put consts (const $ Map.insert s reg' consts')
   put cs (const (con':cs'))
 
+-- get address to a stored string
 getString :: String -> CGState LLVMValue
 getString s = do
   cs <- get consts
   reg <- lookup "getString" s cs
   getarrayelemptr [intConst 0] reg
 
-{-
-addGlobalVar :: String -> LLVMValue -> CGState ()
-addGlobalVar name arg = do
-  globals' <- get globals
-  gs' <- get gs
-  let var' = LLVMRegister (drop1Ptr $ getTyp arg) ('@' : name)
-  let glo' = LLVMGlobal var' [External,Global]
-  put globals (const $ Map.insert name arg globals')
-  put gs (const (glo':gs'))
--}
-
+-- add stack allocations, all stack allocations are made in the beginning of each function.
+-- this way we can take advantage of the "mem2reg" pass
+addAlloca :: LLVMValue -> CGState ()
 addAlloca reg = do
-  allocs' <- get allocs
-  put allocs (const (reg:allocs'))
+  let typ = drop1Ptr . getTyp $ reg
+      instr = Alloca reg typ
+  f <- get currf
+  put currf (const (DL.cons instr f))
   
 addGlobalVar :: String -> LLVMValue -> [LLVMLinkage] -> Maybe LLVMGlobalInitializer -> CGState ()
 addGlobalVar name arg linkage init = do
@@ -193,26 +155,22 @@ addGlobalVar name arg linkage init = do
   put globals (const $ Map.insert name arg globals')
   put gs (const (glo':gs'))
 
-
 getFunType :: String -> CGState LLVMType
 getFunType name = get funs >>= lookup "getFunType" name
 
+-- get result type of a function
 getResType :: String -> CGState LLVMType
 getResType name = do
-  funs' <- get funs
-  ftyp <- lookup "getResType" name funs'
+  ftyp <- getFunType name
   return (rettyp ftyp)
          where
-           rettyp (Tptr (Tfun r rr)) = r
-           rettyp (Tfun r rr) = r
+           rettyp (Tptr (Tfun r _)) = r
+           rettyp (Tfun r _) = r
 
 addFunType :: String -> LLVMType -> CGState ()
 addFunType name typ = do
   funs' <- get funs
   put funs (const $ Map.insert name typ funs')
-
-getExternalFun :: String -> CGState LLVMType
-getExternalFun name = get funs >>= lookup "getExternalFun" name 
 
 addExternalFun :: String -> LLVMType -> [LLVMType] -> CGState ()
 addExternalFun name rettyp argtyps = do
@@ -247,7 +205,7 @@ addGCArray typ name vals = do
 addTopLevelConstant :: LLVMValue -> LLVMValue -> [LLVMLinkage] -> CGState ()
 addTopLevelConstant var val linkage = do
   cs' <- get cs
-  let con' = LLVMTopLevelConstant var linkage val --reg' [Internal] var'
+  let con' = LLVMTopLevelConstant var linkage val
   put cs (const $ con':cs')
 
 getLocalGC :: String -> CGState LLVMValue
@@ -304,14 +262,14 @@ addVarToEnv :: String -> LLVMType -> CGState LLVMValue
 addVarToEnv var typ = do
   r1 <- getNewResReg (ptr typ)
   (scope:rest) <- get typeEnv
-  put typeEnv (const $ (Map.insert var r1 scope):rest)
+  put typeEnv (const $ Map.insert var r1 scope : rest)
   return r1  
 
 addVariableToScope :: String -> LLVMValue -> CGState ()
 addVariableToScope var reg = do
   (scope:rest) <- get typeEnv
-  put typeEnv (const $ (Map.insert var reg scope):rest)
-
+  put typeEnv (const $ Map.insert var reg scope : rest)
+ 
 addParamToScope :: (String,LLVMValue) -> CGState ()
 addParamToScope (var,reg) = do
   (scope:rest) <- get typeEnv
@@ -338,39 +296,34 @@ getModule = do
   return $ LLVMModule name td' gs' fds' cs' fs'
 
 emits :: [LLVMInstruction] -> CGState ()
-emits xs = mapM_ emit xs
+emits = mapM_ emit
 
 emit :: LLVMInstruction -> CGState ()
 emit s = do
   f <- get currf
-  put currf (const (f ++ [s]))
+  put currf (const (DL.snoc f s))
 
 addCurrFunction :: String -> LLVMType -> [(String,LLVMType)] -> CGState ()
 addCurrFunction name rettyp paramtypes = do
   code <- get currf
   fs' <- get fs
-  allocs' <- get allocs
-  let fun = LLVMFunction name rettyp paramtypes ((map (\reg -> Alloca reg (drop1Ptr (getTyp reg))) allocs') ++ code)
---  fail $ show allocs'
+  let fun = LLVMFunction name rettyp paramtypes (DL.toList code)
   put fs (const $ fun:fs')
-  put currf (const [])
-  put allocs (const [])
+  put currf (const DL.empty)
 
--- getstructfield?
+-- get index of a field inside a struct
 getStructIndex :: LLVMType -> String -> CGState (Int,LLVMType)
 getStructIndex name var = 
   get structs >>= lookup "getStructIndex" (dropPtrs name) >>= lookup "getStructIndex"  var
 
-getStruct :: LLVMType -> CGState (Map.Map String (Int,LLVMType))
-getStruct name = 
-  get structs >>= lookup "getStruct" name
-
+-- get size of a struct, measured in WORD
 getStructSize :: LLVMType -> CGState Int
 getStructSize styp = do
   ss <- get structs
   s <- lookup "getStructSize" (dropPtrs styp) ss
   calcStructSize ((snd.unzip) (Map.toList s))
 
+-- calculate offset inside a struct, measured in WORD
 getStructOffset :: LLVMType -> String -> CGState Int
 getStructOffset styp fname = do
   ss <- get structs
@@ -378,6 +331,7 @@ getStructOffset styp fname = do
   (offset,_) <- getStructIndex styp fname
   calcStructSize (take offset (sort ((snd.unzip) (Map.toList s))))
 
+-- add a struct definition to env
 addStruct :: String -> [(String,LLVMType)] -> CGState ()
 addStruct name tups = do
   s <- get structs
@@ -446,9 +400,7 @@ s0 = CodeGenState {
        cgStructs = Map.empty,
        cgSs      = [],
        cgFs      = [],
-       cgCurrF   = [],
-       cgAllocs  = []
-
+       cgCurrF   = DL.empty
      }
 
 
@@ -458,6 +410,7 @@ s0 = CodeGenState {
 
 int :: LLVMType
 int = Tint 32
+
 bit32 :: LLVMType
 bit32 = Tint 32
 
@@ -609,7 +562,7 @@ emitBinaryOp instr op1 op2 = do
   emit $ instr r1 op1 op2
   return r1
 
-add = emitBinaryOp Add  -- $ if isFloat op1 then Fadd op1 op2 else Add op1 op2
+add = emitBinaryOp Add
 sub = emitBinaryOp Sub
 mul = emitBinaryOp Mul
 div = emitBinaryOp Sdiv
@@ -681,53 +634,27 @@ zext typ@(Tint n) op1 = do
        r1 <- getNewResReg typ
        emit $ Zext r1 op1 typ
        return r1
-ret op1 = emit $ Ret op1
+ret = emit . Ret
 retvoid = ret voidConst
 alloca typ = do
   r1 <- getNewResReg (Tptr typ)
   addAlloca r1
---  emit $ Alloca r1 typ
   return r1
 call fname exps = do
   resTyp <- getResType fname
   r1 <- getNewResReg resTyp
   emit $ Call (Just r1) resTyp fname exps
   return r1
-
-{-
-call' fname exps = do
-  restyp <- getResType fname
-  r1 <- getNewResReg restyp
-  emit $ Call fname restyp r1 exps
-  return r1
--}
 callvoid fname exps = emit $ Call Nothing Tvoid fname exps
-callhigher freg ftyp@(Tptr (Tfun rtyp _)) exps = do
+callhigher freg ftyp exps = do
+  let (Tfun rtyp _) = dropPtrs ftyp
   r2 <- getNewResReg rtyp
   emit $ Callhigher r2 ftyp freg exps
   return r2
-callhigher freg ftyp@(Tfun rtyp _) exps = do
-  r2 <- getNewResReg rtyp
-  emit $ Callhigher r2 ftyp freg exps
-  return r2
-callhigher freg ftyp exps = fail $ "\n" ++ show freg ++ "\n" ++ show ftyp ++ "\n" ++ show exps
---  r2 <- getNewResReg int
---  emit $ Callhigher r2 ftyp freg exps
---  return r2
-
-
-
---
 getelementptr typ offset op1 = do
   r1 <- getNewResReg (ptr typ)
   emit $ Getelementptr r1 op1 offset
   return r1
-
-getelementptr' typ offset op1 = do
-  r1 <- getNewResReg (ptr typ)
-  emit $ Getelementptr r1 op1 offset
-  return r1
-
 getstructelemptr name op1 = do
   let styp = getTyp op1
   (offset,etyp) <- getStructIndex (dropPtrs styp) name
@@ -735,19 +662,7 @@ getstructelemptr name op1 = do
   emit $ Getelementptr r1 op1 [intConst offset]
   return r1
 
-getarrayelemptr' etyp index arr = do
---  let atyp@(Ptr (Tstruct _ etyp)) = getTyp op1
-  --fail $ show $ isStruct $ getTyp op1
-  --fail $ show $ getTyp arr
-  --let atyp@(Ptr (Tarray _ etyp)) = getTyp arr
-  r1 <- getNewResReg (ptr etyp)
-  emit $ Getelementptr r1 arr index
-  return r1
-
 getarrayelemptr index op1 = do
---  let atyp@(Ptr (Tstruct _ etyp)) = getTyp op1
---  fail $ show $ isStruct $ getTyp op1
---  tr $ show op1  
   let (Tarray _ etyp) = dropPtrs $ getTyp op1
   r1 <- getNewResReg (ptr etyp)
   emit $ Getelementptr r1 op1 index
@@ -791,13 +706,6 @@ extractelement op1 op2 = do
 insertelement  op1 op2 op3 = do
   r1 <- getNewResReg (getTyp op1)
   emit $ Insertelement r1 op1 op2 op3
-  return r1
-shufflevector  op1 op2 op3 = do
-  let (Tvector n1 typ1) = getTyp op1
-      (Tvector n2 typ2) = getTyp op3
-      newtyp = Tvector n2 typ1 
-  r1 <- getNewResReg newtyp       
-  emit $ Shufflevector r1 op1 op2 op3
   return r1
 
 -- Transform kindle-types into a llvm representation

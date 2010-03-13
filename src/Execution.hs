@@ -187,7 +187,8 @@ linkBC global_cfg clo r bc_files = do
              ++ unwords bc_files
              ++ " -o " ++ bc_file
       -- apply llvm optimizations
-      cmd2 = "opt -mem2reg -deadtypeelim -dce "
+      cmd2 = llvmOPT cfg
+             ++" -mem2reg -deadtypeelim "
              ++ bc_file
              ++ " -f -o " 
              ++ bc_file
@@ -210,19 +211,6 @@ linkBC global_cfg clo r bc_files = do
              ++ " -DROOT=" ++ rootId
              ++ " -DROOTINIT=" ++ initId ++ " "
              ++ rtsMain clo 
-{-      cmd = cCompiler cfg
-            ++ linkFlags cfg
-            ++ compileFlags cfg
-            ++ " -o " ++ outfile clo
-            ++ unwords bc_files
-            ++ " -L" ++ rtsDir clo
-            ++ " -I" ++ includeDir clo
-            ++ " -I" ++ libDir clo
-            ++ " -I " ++ rtsDir clo
-            ++ " -DROOT=" ++ rootId
-            ++ " -DROOTINIT=" ++ initId
-            ++ rtsMain clo 
-            ++ linkLibs cfg-}
   tr $ cmd1
   tr $ cmd2
   tr $ cmd3
