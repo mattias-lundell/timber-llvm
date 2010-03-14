@@ -95,21 +95,22 @@ data CfgOpts         = CfgOpts { cCompiler       :: FilePath,
                                } deriving (Show, Eq, Read)
 
 -- | Command line options.
-data CmdLineOpts     = CmdLineOpts { isVerbose :: Bool,
-                                     datadir   :: FilePath,
-                                     target    :: String,
-                                     outfile   :: FilePath,
-                                     root      :: String,
-                                     make      :: String,
-                                     api       :: Bool,
-                                     pager     :: FilePath,
-                                     shortcut  :: Bool,
-                                     stopAtC   :: Bool,
-                                     stopAtO   :: Bool,
-                                     doScp     :: Bool,
-                                     dumpAfter :: Pass -> Bool,
-                                     stopAfter :: Pass -> Bool,
-                                     doLLVM    :: Bool
+data CmdLineOpts     = CmdLineOpts { isVerbose    :: Bool,
+                                     datadir      :: FilePath,
+                                     target       :: String,
+                                     outfile      :: FilePath,
+                                     root         :: String,
+                                     make         :: String,
+                                     api          :: Bool,
+                                     pager        :: FilePath,
+                                     shortcut     :: Bool,
+                                     stopAtC      :: Bool,
+                                     stopAtO      :: Bool,
+                                     doScp        :: Bool,
+                                     dumpAfter    :: Pass -> Bool,
+                                     stopAfter    :: Pass -> Bool,
+                                     doLLVM       :: Bool,
+                                     llvmOptFlags :: String    
                                    }
 
 
@@ -177,7 +178,11 @@ options              = [ Option []
                          Option []
                                 ["llvm"]
                                 (NoArg LLVM)
-                                "Compile to LLVM"
+                                "Compile to LLVM",
+                         Option []
+                                ["llvmopt"]
+                                (ReqArg LLVMOptFlags "[LLVM-flags]")
+                                "Provide LLVM optimization flags"
                        ]
                        ++ 
                        [ Option []
@@ -214,6 +219,7 @@ data Flag            = Help
                      | DumpAfter Pass
                      | StopAfter Pass
                      | LLVM
+                     | LLVMOptFlags String
                      deriving (Show,Eq)
 
 data TimbercException
@@ -266,41 +272,39 @@ helpMsg              = do pgm <- getProgName
 -- CmdLineOpts is a set of functions that can be queried
 -- about the command line options.
 
-mkCmdLineOpts        :: [Flag] -> CmdLineOpts
-mkCmdLineOpts flags  =  CmdLineOpts { isVerbose = find Verbose,
-                                      datadir   = first ""
-                                                  [ dir | (Datadir dir) <- flags ],
-                                      target    = first "POSIX"
-                                                  [ target | (Target target) <- flags ],
-                                      outfile   = first "a.out"
-                                                  [ file | (Outfile file) <- flags ],
-                                      root      = first "root"
-                                                  [ root | (Root root) <- flags ],
-                                      make      = first ""
-                                                  [ root | Make root <- flags ],
-                                      api       = find Api,
-                                      pager     = first "less"
-                                                  [ p | (Pager p) <- flags ],
-                                      shortcut  = find ShortCut,
-                                      stopAtC   = find StopAtC,
-                                      stopAtO   = find StopAtO,
-                                      doScp     = find DoScp,
-                                      dumpAfter = find . DumpAfter,
-                                      stopAfter = find . StopAfter,
-                                      doLLVM    = find LLVM
-                                    }
+mkCmdLineOpts :: [Flag] -> CmdLineOpts
+mkCmdLineOpts flags =  
+    CmdLineOpts { isVerbose    = find Verbose,
+                  datadir      = first ""
+                                 [ dir | (Datadir dir) <- flags ],
+                  target       = first "POSIX"
+                                 [ target | (Target target) <- flags ],
+                  outfile      = first "a.out"
+                                 [ file | (Outfile file) <- flags ],
+                  root         = first "root"
+                                 [ root | (Root root) <- flags ],
+                  make         = first ""
+                                 [ root | Make root <- flags ],
+                  api          = find Api,
+                  pager        = first "less"
+                                 [ p | (Pager p) <- flags ],
+                  shortcut     = find ShortCut,
+                  stopAtC      = find StopAtC,
+                  stopAtO      = find StopAtO,
+                  doScp        = find DoScp,
+                  dumpAfter    = find . DumpAfter,
+                  stopAfter    = find . StopAfter,
+                  doLLVM       = find LLVM,
+                  llvmOptFlags = first ""
+                                 [ llvmflags | LLVMOptFlags llvmflags <- flags ]
+                }
   where 
-    first def []     = def
-    first def (opt:_)= opt
-    find opt         = first False [ True | flag <- flags, flag == opt ]
-
-
-
-
+    first def []      = def
+    first def (opt:_) = opt
+    find  opt         = first False [ True | flag <- flags, flag == opt ]
 
 -- | Read the configuration file from the standard locaton for the target.
 readCfg clo = parseCfg (rtsCfg clo)
-
 
 -- | Read the configuration at the given location.
 parseCfg file

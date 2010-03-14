@@ -180,7 +180,7 @@ linkBC global_cfg clo r bc_files = do
   cfg <- foldr ((=<<) . fileCfg clo) (return global_cfg) bc_files
   let rootId     = name2str r
       Just rMod = fromMod r
-      initId     = "_init_" ++ modToundSc rMod
+      initId     = "_init_" ++ modToundSc rMod 
       -- link bc_files with libTimber.bc
       cmd1 = llvmLD cfg
              ++ rtsDir clo ++ "/libTimber.bc "
@@ -188,7 +188,8 @@ linkBC global_cfg clo r bc_files = do
              ++ " -o " ++ bc_file
       -- apply llvm optimizations
       cmd2 = llvmOPT cfg
-             ++" -mem2reg -deadtypeelim "
+             ++ " -mem2reg -deadtypeelim "
+             ++ llvmOptFlags clo ++ " "
              ++ bc_file
              ++ " -f -o " 
              ++ bc_file
