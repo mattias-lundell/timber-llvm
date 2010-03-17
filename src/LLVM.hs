@@ -7,29 +7,14 @@ import Data.Char (ord, intToDigit)
 import Data.List.Split (chunk)
 import Numeric
 
--- a type has a type and a size in bytes (or words)
--- a struct has a total size and all elements have 
--- individual sizes and offsets, maybe store the
--- struct type as 
---
--- Tstruct String [(Type,Integer)]
--- Tstruct name   [(type,offset)]
---
--- functions sizeof, calculate size of a type
---           offset, calculate offset for a parameter in a struct
-
-data LLVMCallingConvention = Ccc
-                           | Fastccc
-                           | Coldcc
+data LLVMCallingConvention = Cc | Fastcc | Coldcc
                               
 instance Show LLVMCallingConvention where
-    show Ccc     = "ccc"
-    show Fastccc = "fastccc"
+    show Cc     = "cc"
+    show Fastcc = "fastcc"
     show Coldcc  = "coldcc"
 
-data LLVMVisibilityStyle = Default
-                         | Hidden
-                         | Protected
+data LLVMVisibilityStyle = Default | Hidden | Protected
 
 instance Show LLVMVisibilityStyle where
     show Default   = "default"
@@ -78,6 +63,7 @@ data LLVMType = Tint Int
               | Topaque
               | Tstruct String
               | Tvector Int LLVMType
+              | Tunion [LLVMType]
                 deriving (Eq, Ord)
 
 instance Show LLVMType where
@@ -90,7 +76,10 @@ instance Show LLVMType where
     show (Tstruct sname)     = '%' : sname
     show Topaque             = "opaque"
     show (Tvector nelem typ) = "<" ++ show nelem ++ " x " ++ show typ ++ ">" 
-    show (Tfun rettyp args)  = show rettyp ++ " (" ++ intercalate ", " (map show args) ++ ")" 
+    show (Tunion typs)       = 
+        "union {" ++ intercalate ", " (map show typs) ++ "}"
+    show (Tfun rettyp args)  = 
+        show rettyp ++ " (" ++ intercalate ", " (map show args) ++ ")" 
 
 data LLVMParameterAttribute = Zeroext
                             | Signext
@@ -140,8 +129,7 @@ instance Show LLVMFunctionAttributes where
     show Noimplicitfloat = "noimplicitfloat"
     show Naked           = "naked"
 
-data LLVMGlobalInitializer = Zeroinitializer
-                           | Null
+data LLVMGlobalInitializer = Zeroinitializer | Null deriving (Eq)
                              
 instance Show LLVMGlobalInitializer where
     show Zeroinitializer = "zeroinitializer"
@@ -149,7 +137,7 @@ instance Show LLVMGlobalInitializer where
 
 data LLVMModule          = LLVMModule { modName     :: String,
                                         modTypDef   :: [LLVMStructDef],
-                                        modGlobal   :: [LLVMGlobal],
+                                        modGlobal   :: [LLVMValue],
                                         modFunDecl  :: [LLVMFunctionDecl],
                                         modTopConst :: [LLVMTopLevelConstant],
                                         modFuns     :: [LLVMFunction] }
@@ -157,55 +145,39 @@ data LLVMModule          = LLVMModule { modName     :: String,
 data LLVMGlobal           = LLVMGlobal LLVMValue [LLVMLinkage] (Maybe LLVMGlobalInitializer) deriving (Show)
 data LLVMFunctionDecl     = LLVMFunctionDecl [LLVMLinkage] String LLVMType deriving (Show)
 data LLVMTopLevelConstant = LLVMTopLevelConstant LLVMValue [LLVMLinkage] LLVMValue deriving (Show)
-data LLVMFunction         = LLVMFunction String LLVMType [(String,LLVMType)] [LLVMInstruction] deriving (Show)
+data LLVMFunction         = LLVMFunction String (Maybe LLVMCallingConvention) LLVMType [(String,LLVMType)] [LLVMInstruction] deriving (Show)
 data LLVMStructDef        = LLVMStructDef LLVMValue [LLVMType] deriving (Show)
-
-isStruct :: LLVMType -> Bool
-isStruct (Tptr (Tstruct _)) = True
-isStruct (Tstruct _) = True
-isStruct _ = False
-
-isArray :: LLVMType -> Bool
-isArray (Tptr (Tarray _ _)) = True
-isArray (Tarray _ _) = True
-isArray _            = False
-
-elemTyp :: LLVMType -> LLVMType
-elemTyp (Tarray _ typ) = typ
-
-isIntType :: LLVMType -> Bool
-isIntType (Tint _) = True
-isIntType _        = False
-
-isFloatType :: LLVMType -> Bool
-isFloatType Tfloat  = True
-isFloatType Tdouble = False
 
 data LLVMLabel = Label Integer deriving (Eq,Ord)
 
 instance Show LLVMLabel where
     show (Label l) = "label" ++ show l
 
-data LLVMValue = LLVMRegister LLVMType RegName Bool
+data LLVMValue = LLVMRegister LLVMType String LLVMRegisterTag
                | LLVMConstant LLVMType ConstValue
                  deriving (Eq,Show)
 
-type RegName = String
+data LLVMRegisterTag = TagGlobal [LLVMLinkage] (Maybe LLVMGlobalInitializer)
+--                     | TagInitialized LLVMValue
+                     | TagLocal
+                       deriving (Eq, Show)
 
 getTyp :: LLVMValue -> LLVMType
 getTyp (LLVMRegister typ _ _) = typ
 getTyp (LLVMConstant typ _) = typ
 
 showWtyp :: LLVMValue -> String
-showWtyp (LLVMRegister typ reg global) = 
-    show typ ++ " " ++ (if global then '@' else '%') : reg
+showWtyp (LLVMRegister typ reg (TagGlobal _ _)) = 
+    show typ ++ " @" ++ reg
+showWtyp (LLVMRegister typ reg TagLocal) = 
+    show typ ++ " %" ++ reg
 showWtyp (LLVMConstant Tvoid _)   = "void"  
 showWtyp (LLVMConstant typ const) = show typ ++ " " ++ show const
 
 showWOtyp :: LLVMValue -> String
-showWOtyp (LLVMRegister typ reg global) = 
-    (if global then '@' else '%') : reg
-showWOtyp (LLVMConstant typ const) = show const
+showWOtyp (LLVMRegister typ reg (TagGlobal _ _)) = '@' : reg
+showWOtyp (LLVMRegister typ reg TagLocal)        = '%' : reg
+showWOtyp (LLVMConstant typ const)               = show const
 
 data ConstValue = IntConst Int
                 | FloatConst Rational

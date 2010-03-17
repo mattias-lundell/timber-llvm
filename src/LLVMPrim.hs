@@ -3,6 +3,7 @@ module LLVMPrim where
 import LLVMKindle
 
 genPrimitives = do
+  -- primitive struct definitions found in rts, (name [(fieldname,fieldtype)])
   addStruct "LIST"  [("GCINFO",poly)]
   addStruct "CONS"  [("GCINFO",poly), 
                      ("a", poly), 
@@ -23,19 +24,19 @@ genPrimitives = do
                      ("size", int), 
                      ("elems",array 0 poly)]
   addStruct "CLOS1" [("GCINFO",poly), 
-                     ("Code", (ptr (fun poly [clos1struct, 
-                                               poly])))]
+                     ("Code", ptr (fun poly [clos1struct, 
+                                             poly]))]
   addStruct "CLOS2" [("GCINFO",poly), 
-                     ("Code", (ptr (fun poly [clos2struct, 
-                                               poly, 
-                                               poly])))]
+                     ("Code", ptr (fun poly [clos2struct, 
+                                             poly, 
+                                             poly]))]
   addStruct "CLOS3" [("GCINFO",poly), 
-                     ("Code", (ptr (fun poly [clos3struct, 
-                                               poly, 
-                                               poly, 
-                                               poly])))]
+                     ("Code", ptr (fun poly [clos3struct, 
+                                             poly, 
+                                             poly, 
+                                             poly]))]
   addStruct "CLOS"  [("GCINFO",poly),
-                     ("Code", (ptr (fun void [])))]
+                     ("Code", ptr (fun void []))]
   
   addStruct "PTHREAD_DESCR_STRUCT" [("a",opaque)]
   addStruct "PTHREAD_FASTLOCK" [("a",int),
@@ -50,12 +51,12 @@ genPrimitives = do
                      ("STATE",    poly)]
   addStruct "AbsTime" [("a",     int),
                        ("b",     int)]
-  addStruct "Msg"   [("GCINFO",   (poly)),
-                     ("Code",     (ptr (fun int [msgstruct]))),
+  addStruct "Msg"   [("GCINFO",   poly),
+                     ("Code",     ptr (fun int [msgstruct])),
                      ("baseline", struct "AbsTime"),
                      ("deadline", struct "AbsTime"),
                      ("next",     msgstruct)]
-  addStruct "Time"  [("GCINFO",   (poly)),
+  addStruct "Time"  [("GCINFO",   poly),
                      ("sec",      int),
                      ("usec",     int)]
   addStruct "EITHER" [("GCINFO", poly),
@@ -66,22 +67,22 @@ genPrimitives = do
   addStruct "RIGHT"  [("GCINFO", poly),
                       ("Tag", int),
                       ("a", poly)]
-  addStruct "FloatCast" [("float", float)]
-  addStruct "WORLD" [("",opaque)] 
-  addStruct "Array" [("GCINFO",poly),
+  addStruct "WORLD" [("", opaque)] 
+  addStruct "Array" [("GCINFO", poly),
                      ("size", int),
                      ("elems", array 0 poly)]
-  addStruct "Timer" [("GCINFO",poly),
-                     ("reset",ptr (fun unit [timerstruct,int])),
-                     ("sample",ptr (fun timestruct [timerstruct,int]))]
+  addStruct "Timer" [("GCINFO", poly),
+                     ("reset", ptr (fun unit [timerstruct,int])),
+                     ("sample", ptr (fun timestruct [timerstruct,int]))]
 
+  -- External functions from rts, (name returntype [argumenttype])
   addExternalFun "new"     void [ptr (ptr int), int]
   addExternalFun "LOCK"    (ptr int) [ptr int]
   addExternalFun "UNLOCK"  bit8 [ptr int]
   addExternalFun "INITREF" void [refstruct]
   addExternalFun "ASYNC"   bit8 [msgstruct,timestruct,timestruct]
-  addExternalFun "primTimeMin" timestruct [timestruct,timestruct];
-  addExternalFun "primTimePlus" timestruct [timestruct,timestruct];
+  addExternalFun "primTimeMin"   timestruct [timestruct,timestruct];
+  addExternalFun "primTimePlus"  timestruct [timestruct,timestruct];
   addExternalFun "primTimeMinus" timestruct [timestruct,timestruct];
   addExternalFun "primTimeEQ" bool [timestruct,timestruct];
   addExternalFun "primTimeNE" bool [timestruct,timestruct];
@@ -89,12 +90,12 @@ genPrimitives = do
   addExternalFun "primTimeLE" bool [timestruct,timestruct];
   addExternalFun "primTimeGT" bool [timestruct,timestruct];
   addExternalFun "primTimeGE" bool [timestruct,timestruct];
-  addExternalFun "sec" timestruct [int]
+  addExternalFun "sec"      timestruct [int]
   addExternalFun "millisec" timestruct [int]
   addExternalFun "microsec" timestruct [int]
-  addExternalFun "secOf" int [timestruct]
+  addExternalFun "secOf"      int [timestruct]
   addExternalFun "microsecOf" int [timestruct]
-  addExternalFun "RAISE"  void [int]
+  addExternalFun "RAISE" void [int]
   addExternalFun "Raise" poly [bit32,int]
   addExternalFun "primRefl" poly [bit32,poly]
   addExternalFun "getStr" liststruct [ptr char]
@@ -108,6 +109,7 @@ genPrimitives = do
   addExternalFun "ABORT" bit8 [bit32,msgstruct,refstruct]
   addExternalFun "primTIMERTERM" timerstruct [int]
 
+  -- References to external GC tags, all arrays of unknown lenght with int elements
   addExternalGC "TUP2"   (array 0 int)
   addExternalGC "TUP3"   (array 0 int)
   addExternalGC "TUP4"   (array 0 int)

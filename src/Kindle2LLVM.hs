@@ -1,3 +1,5 @@
+
+
 module Kindle2LLVM where
 
 import Kindle hiding (unit)
@@ -11,6 +13,7 @@ import LLVMPP
 import Prelude hiding (and,or,div,rem)
 import LLVMPrim
 import Env
+import qualified Data.Map as Map
 
 import Data.Int
 import Data.Char
@@ -19,9 +22,10 @@ import LLVMKindle
 import Depend (groupMap)
 
 -- dsi contains structdefs Map Name Kindle.Decl
-kindle2llvm e2 e3 m = do
-  let (mod,_) = runState (codeGenModule e2 e3 m) s0
-      source = ppLLVMModule mod
+kindle2llvm e2 e3 m@(Module name _ _ _ _) = do
+  --let (mod,_) = runState (codeGenModule e2 e3 m) s0
+  let mod = runCodeGen (show name) (codeGenModule e2 e3 m) 
+  let source = ppLLVMModule mod
 --  tr $ show m
 --  tr $ source
   return source
@@ -36,18 +40,17 @@ codeGenModule (Core.Module _ _ _ es' _ _ [bs']) dsi (Module moduleName importNam
       -- add functions declarations from imported files
       ktypedEf = mapSnd P.pType tei
   -- gen code
-  setModuleName (show moduleName)
+--  setModuleName (show moduleName)
   genPrimitives
   -- struct declarations
-  k2llvmStructDecls (decls ++ ktypedEs) --mapM_ codeGenDecl (decls ++ ktypedEs)
-  mapM_ (\(sname,_) -> addExternalGC (k2llvmName sname) (Tarray 0 int) {-(ptr word)-}) ktypedEs 
+  k2llvmStructDecls (decls ++ ktypedEs)
+  mapM_ (\(sname,_) -> addExternalGC (k2llvmName sname) (Tarray 0 int)) ktypedEs 
   k2llvmAddExternals (ktypedEf ++ es)
   k2llvmAddGlobalVars binds
   k2llvmHarvestFunTypes binds
   k2llvmTopBinds binds
-  initModule moduleName importNames binds
+  initModule moduleName importNames binds  
   getModule
-  --return ((show moduleName),code) 
 
 -- Add external functions and global variable bindings
 k2llvmAddExternals binds = mapM_ f binds
@@ -61,8 +64,8 @@ k2llvmAddExternals binds = mapM_ f binds
       f (vname, ValT vtyp) = do
         let vname' = k2llvmName vname 
             vtyp'  = k2llvmType vtyp
-            reg    = LLVMRegister (ptr vtyp') vname' True
-        addGlobalVar vname' reg [External,Global] Nothing
+            reg    = LLVMRegister (ptr vtyp') vname' (TagGlobal [External,Global] Nothing)
+        addGlobalVar vname' reg -- [External,Global] Nothing
 
 -- Add struct binds
 k2llvmStructDecls sdecls = mapM_ f sdecls
@@ -94,11 +97,9 @@ k2llvmStructBinds var ntype bind = mapM_ f bind
         let typ = getTyp r0
             typ_noptr = dropPtrs typ
             name = k2llvmName vname
-        --r1 <- getNewResReg typ
         r2 <- codeGenExp exp
         (offset,typ) <- getStructIndex typ_noptr name
         getelementptr typ [intConst offset] r0 >>= store r2
-        --getstructelem (k2llvmName vname) r0 >>= store r2
       f (vname, Fun _ t te (CRet (ECall fname [] es))) = do
         r0 <- codeGenExp var
         let typ = getTyp r0
@@ -106,7 +107,7 @@ k2llvmStructBinds var ntype bind = mapM_ f bind
             name = k2llvmName vname
         (offset,typ) <- getStructIndex typ_noptr name
         ftyp <- getFunType (k2llvmName fname)
-        let freg = LLVMRegister ftyp (k2llvmName fname) True
+        let freg = LLVMRegister ftyp (k2llvmName fname) (TagGlobal [] Nothing) --True
         r1 <- getelementptr typ [intConst offset] r0 
         if k2llvmName ntype == "CLOS" 
             then 
@@ -131,45 +132,45 @@ k2llvmAddGlobalVars binds = mapM_ f binds
       f (vname, Val atype exp) = do
         let name = k2llvmName vname
             typ = k2llvmType atype
-            reg = LLVMRegister (ptr typ) name True
         if isPtr typ 
             then
-                addGlobalVar name reg [Common,Global] (Just Null)
+                addGlobalVar name (LLVMRegister (ptr typ) name (TagGlobal [Common,Global] (Just Null)))
             else
-                addGlobalVar name reg [Common,Global] (Just Zeroinitializer)
+                addGlobalVar name (LLVMRegister (ptr typ) name (TagGlobal [Common,Global] (Just Zeroinitializer)))
             
       f _ = return ()
 
 -- Process toplevel bindings
 k2llvmTopBinds binds = mapM_ f binds
   where f b@(fname, Fun [] funtyp typenv cmds) = do
-          setFunName (k2llvmName fname)
-          enterNewScope
+          tr $ show fname
+          globals <- cgmGets cgmGlobals 
+          cgfPut (cgf0 (k2llvmName fname) globals)
           params <- atenv2params typenv
           mapM_ addParams params
           codeGenCmd cmds
           unreachable
-          leaveScope
-          addCurrFunction (k2llvmName fname) (k2llvmType funtyp) params
+          addCurrFunction (k2llvmType funtyp) params
         f b@(vname, Val _ (ECall (Prim GCINFO _) [] vs@(EVar v : _))) = do
           vals <- mapM (gcArray v) vs
-          addGCArray (Tarray (length vals) int) (k2llvmName vname) vals
-          return ()
-        f _                    = return ()
+          addLocalGC (Tarray (length vals) int) (k2llvmName vname) vals
+        f _ = return ()
 
 k2llvmValBinds (_,binds) = mapM_ f binds >> mapM_ g binds
     where f (vname, Val vtyp (ENew ntyp [] binds)) = do
             let typ = k2llvmType vtyp
                 name = k2llvmName vname
             size <- getStructSize (dropPtrs typ)            
+            --fail $ "1"
             var <- lookupVar name           
             r1 <- codeGenNew' var typ size
-            addVariableToScope name r1
+            addVar name r1
           f (vname, Val vtyp (ECast _ (ENew ntyp [] binds))) = do
             let objtyp = k2llvmType vtyp
                 castyp = Tstruct (k2llvmName ntyp)
                 sname  = k2llvmName ntyp
                 vname' = k2llvmName vname
+            --fail $ "2"
             var <- lookupVar vname'
             case var of
               Just reg -> do
@@ -177,45 +178,61 @@ k2llvmValBinds (_,binds) = mapM_ f binds >> mapM_ g binds
                        r1 <- codeGenNew' (Just reg) (ptr castyp) size
                        return ()
               Nothing -> do
-                size <- getStructSize castyp
-                r1 <- codeGenNew' Nothing (ptr castyp) size
-                r2 <- bitcast (ptr objtyp) r1
-                addVariableToScope vname' r2
+                       size <- getStructSize castyp
+                       r1 <- codeGenNew' Nothing (ptr castyp) size
+                       r2 <- bitcast (ptr objtyp) r1
+                       addVar vname' r2
           f (vname, Val vtyp exp0) = do
             let typ = k2llvmType vtyp
                 name = k2llvmName vname
             r1 <- codeGenExp exp0
+            --fail $ "3"
             var <- lookupVar name
             case var of
               Just reg -> store r1 reg
               Nothing -> do
                        r2 <- alloca typ
                        store r1 r2
-                       addVariableToScope name r2
+                       addVar name r2
           f _                                                = return ()
           g (vname, Val vtyp (ENew ntyp [] binds))           = k2llvmStructBinds (EVar vname) ntyp binds
           g (vname, Val vtyp (ECast _ (ENew ntyp [] binds))) = k2llvmStructBinds (ECast (tCon ntyp) (EVar vname)) ntyp binds
           g _                                                = return ()
 
 addParams (var,typ) = do
-  --let var' = "%" ++ var 
-  reg <- getNamedOpReg var typ
+  reg <- getNewNamedResReg var typ
   case typ of
     (Tptr (Tstruct _)) -> do
-               --let reg' = Register typ reg Operand
                r1 <- alloca typ
                store reg r1
-               addParamToScope (var,r1)
+               addVar var r1
     _         -> do
                r1 <- alloca typ
                store reg r1
-               addParamToScope (var,r1)
+               addVar var r1
 
 bindGCINFO r0 typ exp = do
   let typ = getTyp r0
       typ_noptr@(Tstruct sname) = dropPtrs typ  
   local <- isLocalStruct typ_noptr
-  if isPrimStruct typ_noptr 
+  if null exp then do
+                  LLVMRegister typ name tag <- getVar ("__GC__" ++ sname)
+                  let r1 = LLVMRegister (ptr (dropPtrs typ)) name tag
+                  r2 <- getarrayelemptr [intConst 0] r1
+                  r3 <- getstructelemptr "GCINFO" r0
+                  store r2 r3                   
+              else do
+                  LLVMRegister typ name tag <- getVar ("__GC__" ++ sname)
+                  let r1 = LLVMRegister (ptr (dropPtrs typ)) name tag
+                  r2 <- codeGenExp (head exp)
+                  r3 <- getelementptr int [intConst 0] r1
+                  r4 <- ptrtoint int r3
+                  r5 <- add r4 r2
+                  r6 <- inttoptr poly r5
+                  r7 <- getstructelemptr "GCINFO" r0
+                  store r6 r7                   
+                
+{-  if isPrimStruct typ_noptr 
     then
       if null exp
         then
@@ -247,9 +264,9 @@ bindGCINFO r0 typ exp = do
             r1 <- getLocalGC sname
             r2 <- getarrayelemptr [intConst 0] r1
             r3 <- getstructelemptr "GCINFO" r0
-            store r2 r3 
+            store r2 r3-}
 
-atenv2params :: ATEnv -> CGState [(String,LLVMType)]
+atenv2params :: ATEnv -> CodeGen [(String,LLVMType)]
 atenv2params ps = return [(k2llvmName v, k2llvmType typ) | (v,typ) <- ps]
                
 lit2value (LInt _ n) = return $ intConst n
@@ -303,39 +320,31 @@ genFloatSwitch m typ end (AWild cmd : alts) = do
   codeGenCmd cmd
   genFloatSwitch m typ end alts
 
-codeGenCmd :: Cmd -> CGState () 
+codeGenCmd :: Cmd -> CodeGen () 
 codeGenCmd cmd0 = case cmd0 of
                     CRet exp1                 -> codeGenExp exp1 >>= ret
                     CRun exp1 cmd1            -> do
                               codeGenExp exp1
                               codeGenCmd cmd1
---                    (CBind False [(_,Val (TCon (Tuple 0 _) _) e)] (CRet (ECast (TCon (Tuple 0 _) _) _))) -> do
---                              codeGenExp e
---                              return ()
                     (CBind False [(x,Val t (ENew n [] bs))] (CBind False [(y,Val tref (ENew (Prim Ref _) [] bs'))] c)) -> do
-                              --let reftyp = (Tstruct "REF")
                               let objtyp = (struct (k2llvmName n))
                               refsize <- getStructSize refstruct
                               objsize <- getStructSize objtyp
                               r1 <- codeGenNew' Nothing refstruct (refsize+objsize)
-                              addVariableToScope (k2llvmName y) r1
+                              addVar (k2llvmName y) r1
                               r2 <- load r1
                               callvoid "INITREF" [r2]
-                              --tr $ show (ECast t (ESel (EVar y) (prim STATE)))
-                              --tr $ show bs
-                              --tr $ show bs'
                               k2llvmStructBinds (ECast t (ESel (EVar y) (prim STATE))) n bs
-                              --(offset,typ) <- getStructIndex refstruct "STATE"
                               codeGenCmd c
                     CBind False binds cmd1    -> do
-                              -- mapM_ codeGenBind binds
                               k2llvmValBinds (False,binds)
                               codeGenCmd cmd1
-                    CBind True binds cmd1     -> do --fail $ "undefined CBind"
+                    CBind True binds cmd1     -> do
                               mapM_ k2llvmValBinds (groupMap binds)
                               codeGenCmd cmd1
                     CUpd name exp1 cmd1       -> do
-                              var <- getVariable (k2llvmName name)
+                              fail $ "4"
+                              var <- getVar (k2llvmName name)
                               exp <- codeGenExp exp1
                               store exp var
                               codeGenCmd cmd1
@@ -345,9 +354,8 @@ codeGenCmd cmd0 = case cmd0 of
                               r3 <- codeGenExp newval
                               (offset,typ) <- getStructIndex typ_noptr (k2llvmName sfield)
                               getelementptr typ [intConst offset] r1 >>= store r3
-                              --getstructelem (k2llvmName sfield) r1 >>= store r3
                               codeGenCmd cmd1
-                    CUpdA array index newval cmd1 -> do --fail $ "undefined CUpdA"
+                    CUpdA array index newval cmd1 -> do
                               r1 <- codeGenExp array
                               r2 <- codeGenExp index
                               r3 <- codeGenExp newval
@@ -356,48 +364,31 @@ codeGenCmd cmd0 = case cmd0 of
                               r4 <- getelementptr typ [intConst offset] r1
                               getelementptr etyp [r2] r4 >>= store r3
                               codeGenCmd cmd1
---                              fail $ "\n" ++ show r1 ++ "\n" ++ show r2 ++ "\n" ++ show r3
-                              --getelementptr 
-                    -- switch can be of different forms, on a "complete"
-                    -- form that covers all cases and ends when the right 
-                    -- case is executed, it can also be on the form 
-                    -- with a default case after the switch statement
-                    -- if there are two cases, use the "select" instruction
-{-                  CSwitch exp1 alts         -> do 
-                              end <- getNextLabel
-                              e <- codeGenExp exp1
-                              let typ' = getTyp e 
-                              genSwitch e typ' end alts
-                              br end
-                              label end-}
-
                     CSwitch exp1 alts -> let firstLit (ALit l _ : _) = l
                                              firstLit (_ : as)       = firstLit as
                                          in case litType (firstLit alts) of
-                                              TCon (Prim LIST _) [TCon (Prim Char _) []] -> do --return () -- k2llvmStringAlts False e alts
+                                              TCon (Prim LIST _) [TCon (Prim Char _) []] -> do
                                                                            end <- getNextLabel
                                                                            exp1' <- codeGenExp exp1
                                                                            let typ = getTyp exp1'
                                                                            genStringSwitch exp1' typ end alts
                                                                            br end
                                                                            label end
-                                              TCon (Prim Float _) []                     -> do --return () -- k2llvmFloatAlts False e alts
+                                              TCon (Prim Float _) []                     -> do
                                                                            end <- getNextLabel
                                                                            exp1' <- codeGenExp exp1
                                                                            let typ = getTyp exp1'
                                                                            genFloatSwitch exp1' typ end alts
                                                                            br end
                                                                            label end
-                                              _                                          -> do --return () -- k2llvmIntAlts 
+                                              _                                          -> do
                                                                            end <- getNextLabel
                                                                            exp1' <- codeGenExp exp1
                                                                            let typ = getTyp exp1'
                                                                            genIntSwitch exp1' typ end alts
                                                                            br end
                                                                            label end
-                    CSeq cmd1 cmd2            -> do
-                              codeGenCmd cmd1
-                              codeGenCmd cmd2
+                    CSeq cmd1 cmd2 -> codeGenCmd cmd1 >> codeGenCmd cmd2
                     CBreak -> return () 
                     CRaise exp1               -> do
                               exp <- codeGenExp exp1
@@ -427,10 +418,12 @@ genStr s = do
   r <- getString s
   call "getStr" [r]
 
-codeGenExp :: Exp -> CGState LLVMValue
+codeGenExp :: Exp -> CodeGen LLVMValue
 codeGenExp exp0 = case exp0 of
                     EVar (Prim Inherit _) -> return $ LLVMConstant timestruct NullConst
-                    EVar name -> getVariable (k2llvmName name) >>= load
+                    EVar name -> do
+                              --fail $ "5"
+                              getVar (k2llvmName name) >>= load
                     EThis -> fail "undefined EThis"      
                     ELit (LInt _ i) -> return $ intConst i
                     ELit (LRat _ r) -> return $ floatConst r
@@ -451,20 +444,17 @@ codeGenExp exp0 = case exp0 of
                     ESel (ECast atype exp) name  -> do
                               -- perform cast from struct to struct
                               let totype@(Tptr totype_noptr) = k2llvmType atype
-                              -- codegen exp
                               -- cast 
                               r2 <- (codeGenExp exp >>= bitcast totype)
                               -- get type and offset
                               (offset,typ) <- getStructIndex totype_noptr (k2llvmName name)
                               getelementptr typ [intConst offset] r2 >>= load
-                              --getstructelem (k2llvmName name) r2 >>= load
                               -- select on ordinary structs
                     ESel   exp1 name             -> do
                               r1 <- codeGenExp exp1
                               let typ@(Tptr typ_noptr) = getTyp r1
                               (offset,typ) <- getStructIndex typ_noptr (k2llvmName name)
                               getelementptr typ [intConst offset] r1 >>= load
-                              --getstructelem (k2llvmName name) r1 >>= load
                     ENew   name atypes binds     -> fail "undefined ENew"
                     ECall  name atypes exps      -> codeGenECall name exps
                     EEnter (ECast clos@(TCon (Prim CLOS _) (rettyp:typs)) fun) fname atypes exps -> do
@@ -481,12 +471,10 @@ codeGenExp exp0 = case exp0 of
                     EEnter exp fname atypes exps -> do
                               r1 <- codeGenExp exp                              
                               let typ@(Tptr typ_noptr) = getTyp r1                              
-                              --r3 <- (getstructelem (k2llvmName fname) r1 >>= load)
                               (offset,typ) <- getStructIndex typ_noptr (k2llvmName fname)
                               r3 <- (getelementptr typ [intConst offset] r1 >>= load)
                               exps' <- mapM codeGenExp (exp:exps)                              
-                              callhigher r3 typ exps' --(exp:exps) 
-                              --codeGenClosCall r3 atypes (exp:exps)
+                              callhigher r3 typ exps'
                     -- many forms of casts, must keep track of types
                     -- for example zext can only be applied to 
                     -- shorter to longer integer, must have some
@@ -499,9 +487,6 @@ codeGenExp exp0 = case exp0 of
                     ECast (TCon (Prim BITS32 _) _) (ELit (LInt _ n)) -> return (bit32Const n)
                     ECast (TCon (Prim BITS16 _) _) (ELit (LInt _ n)) -> return (bit16Const n)
                     ECast (TCon (Prim BITS8  _) _) (ELit (LInt _ n)) -> return (bit8Const  n)                                
-                    --  (ECast (TCon Int []) (ECall ! [] [ECast (TCon BITS32 []) (ELit LInt 1),EVar e,ELit LInt 0])))]
-                    --ECast elemtyp (ECall (Prim IndexArray _) [] exps) -> do --fail $ "no array index"
-                             
                     ECast ktotype exp1 -> do
                               r1 <- codeGenExp exp1
                               let totype   = k2llvmType ktotype        
@@ -524,12 +509,12 @@ codeGenExp exp0 = case exp0 of
                                                  Tint _ -> bitcast totype r1
                                                  Tptr _ -> bitcast int r1 >>= inttoptr totype 
 
-primBin :: (LLVMValue -> LLVMValue -> CGState LLVMValue) -> [Exp] -> CGState LLVMValue
+primBin :: (LLVMValue -> LLVMValue -> CodeGen LLVMValue) -> [Exp] -> CodeGen LLVMValue
 primBin f exps = do
   [op1,op2] <- mapM codeGenExp exps
   f op1 op2
 
-primIcmp :: IcmpArg -> [Exp] -> CGState LLVMValue
+primIcmp :: IcmpArg -> [Exp] -> CodeGen LLVMValue
 primIcmp cmp exps = do
   [op1,op2] <- mapM codeGenExp exps
   case (getTyp op1) of
@@ -539,7 +524,7 @@ primIcmp cmp exps = do
       r2 <- ptrtoint word op1
       icmp cmp r1 r2
 
-primFcmp :: FcmpArg -> [Exp] -> CGState LLVMValue
+primFcmp :: FcmpArg -> [Exp] -> CodeGen LLVMValue
 primFcmp cmp exps = do
   [op1,op2] <- mapM codeGenExp exps
   fcmp cmp op1 op2
@@ -570,7 +555,7 @@ bitNot exps = do
   let (Tint n) = getTyp op1
   bitcast (Tvector n bool) op1 >>= xor (vectorConst (replicate n true)) >>= bitcast (Tint n)
 
-codeGenECall :: Name -> [Exp] -> CGState LLVMValue
+codeGenECall :: Name -> [Exp] -> CodeGen LLVMValue
 codeGenECall (Prim name _) exps 
     | name `elem` [AND8,AND16,AND32]             = primBin and exps
     | name `elem` [OR8,OR16,OR32]                = primBin or exps
@@ -605,7 +590,6 @@ codeGenECall (Prim name _) exps
                     IntMod   -> primBin rem exps
                     IntNeg   -> do
                               [exp] <- mapM codeGenExp exps
-                              --let zero = Value {typ=int, value=(Vint32 0), regType=Operand}
                               sub (intConst 0) exp
                     IntEQ -> primIcmp IcmpEQ exps
                     IntNE -> primIcmp IcmpNE exps                             
@@ -619,7 +603,6 @@ codeGenECall (Prim name _) exps
                     FloatDiv   -> primBin fdiv exps                            
                     FloatNeg  -> do
                               [exp] <- mapM codeGenExp exps
-                              --let zero = Value {typ=float, value=(Vfloat 0), regType=Operand}
                               fsub (floatConst 0) exp
                     FloatEQ -> primFcmp FcmpUEQ exps
                     FloatNE -> primFcmp FcmpUNE exps                              
@@ -627,7 +610,6 @@ codeGenECall (Prim name _) exps
                     FloatGE -> primFcmp FcmpUGE exps                              
                     FloatLT -> primFcmp FcmpULT exps                              
                     FloatLE -> primFcmp FcmpULE exps                              
-                    GCINFO -> return $ intConst 0
                     LOCK   -> mapM codeGenExp exps >>= call "LOCK"
                     UNLOCK -> mapM codeGenExp exps >>= call "UNLOCK"
                     ASYNC ->  mapM codeGenExp exps >>= call "ASYNC"
@@ -637,27 +619,14 @@ codeGenECall (Prim name _) exps
                     FloatToInt -> do
                               [exp] <- mapM codeGenExp exps
                               fptosi int exp
-                    Float2POLY -> do
+                    Float2POLY -> do 
                               [exp] <- mapM codeGenExp exps
-                              r1 <- alloca (struct "FloatCast") 
-                              r2 <- getelementptr float [intConst 0] r1 
-                              store exp r2
-                              r3 <- getelementptr float [intConst 0] r1
-                              r4 <- bitcast (ptr (ptr int)) r3
-                              load r4
-                              --return r5
+                              r1 <- bitcast int exp
+                              inttoptr poly r1
                     POLY2Float -> do
                               [exp] <- mapM codeGenExp exps
-                              r1 <- alloca (struct "FloatCast")
-                              r2 <- getelementptr float [intConst 0] r1
-                              r3 <-bitcast (ptr (ptr int)) r2
-                              store exp r3
-                              r4 <- getelementptr float [intConst 0] r1
-                              load r4
-                              --return r5
-                              --store exp r3
---                              bitcast (ptr (struct "FloatCast")) exp >>=    
---                                      getelementptr float [intConst 0] >>= load
+                              r1 <- ptrtoint int exp
+                              bitcast float r1
                     LazyAnd -> do                              
                               [op1,op2] <- mapM codeGenExp exps                              
                               r1 <- alloca bool
@@ -729,45 +698,34 @@ codeGenECall name exps = do
   let fname = k2llvmName name
   call fname exps'
 
-codeGenClosCall :: LLVMValue -> [AType] -> [Exp] -> CGState LLVMValue
+codeGenClosCall :: LLVMValue -> [AType] -> [Exp] -> CodeGen LLVMValue
 codeGenClosCall funAddr typs exps = mapM codeGenExp exps >>= callhigher funAddr poly
 
-codeGenCall :: String -> [Exp] -> CGState LLVMValue
+codeGenCall :: String -> [Exp] -> CodeGen LLVMValue
 codeGenCall fname exps = mapM codeGenExp exps >>= call fname
-{-
-codeGenNew :: LLVMType -> Int -> CGState LLVMValue
-codeGenNew typ size = do
-  r1 <- alloca (ptr int)
-  let size' = intConst (LLVMKindle.words size)
-  callvoid "new" [r1,size']
-  bitcast (ptr typ) r1
--}
-codeGenNew' :: Maybe LLVMValue -> LLVMType -> Int -> CGState LLVMValue
+
+codeGenNew' :: Maybe LLVMValue -> LLVMType -> Int -> CodeGen LLVMValue
 codeGenNew' (Just r1) typ size = do
   r2 <- bitcast (ptr $ ptr int) r1
   let size' = intConst (LLVMKindle.words size)
   callvoid "new" [r2,size']
   return r1
 codeGenNew' Nothing typ size = do
-{-  r1 <- alloca (ptr int)
-  let size' = intConst (LLVMKindle.words size)
-  callvoid "new" [r1,size']
-  bitcast (ptr typ) r1-}
   r1 <- alloca typ
   r2 <- bitcast (ptr (ptr int)) r1
   let size' = intConst (LLVMKindle.words size)
   callvoid "new" [r2,size']
   return r1
---  load r1
 
 isBigTuple n = isTuple n && width n > 4
 
 initModule n ns bs = do
-  enterNewScope
   let fname = "_init_" ++ modToundSc (str n)
-      var    = LLVMRegister bool "INITIALIZED" True
-      varptr = LLVMRegister (ptr bool) "INITIALIZED" True
-  addTopLevelConstant var false [Internal,Global]
+      var    = LLVMRegister bool "INITIALIZED" (TagGlobal [Internal,Global] Nothing)
+      varptr = LLVMRegister (ptr bool) "INITIALIZED" (TagGlobal [Internal,Global] Nothing)
+  globals <- cgmGets cgmGlobals 
+  cgfPut (cgf0 fname globals)
+  addTopLevelConstant "INITIALIZED" var [Internal,Global] false
   l1 <- getNextLabel
   l2 <- getNextLabel
   load varptr >>= icmp IcmpEQ false >>= condbr l1 l2
@@ -778,8 +736,7 @@ initModule n ns bs = do
   br l2
   label l2
   retvoid
-  leaveScope
-  addCurrFunction fname void []
+  addCurrFunction void []
 
 initImports ns = mapM f ns
     where 

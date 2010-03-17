@@ -23,9 +23,17 @@ showLLVMstring (c:cs)
 ppLLVMModule :: LLVMModule -> String
 ppLLVMModule (LLVMModule name td gs fds cs fs) = render file
     where 
-      file = vcat $ map pp td  ++ [newline] ++ map pp gs ++ [newline] ++ 
-                    map pp fds ++ [newline] ++ map pp cs ++ [newline] ++ 
-                    map pp fs
+      file = vcat $
+             [text "; typedefinitions"] ++
+             map pp td ++ 
+             [newline <> text "; global variables"] ++
+             map ppGlobalValue gs ++ 
+             [newline <> text "; external functions"] ++
+             map pp fds ++ 
+             [newline <> text "; toplevel constant"] ++
+             map pp cs ++ 
+             [newline <> text "; local functions"] ++
+             map pp fs
 
 ppParams :: [(String,LLVMType)] -> Doc
 ppParams ((name,typ):p:ps) = ppType typ <> text " %" <> text name <> comma <> space <> ppParams (p:ps)
@@ -43,10 +51,18 @@ ppValWtyp :: LLVMValue -> Doc
 ppValWtyp r@(LLVMRegister typ _ _) = pp typ <+> ppValWOtyp r
 ppValWtyp (LLVMConstant Tvoid _)   = text "void"
 ppValWtyp r@(LLVMConstant typ const) = pp typ <+> ppValWOtyp r
-           
+
+ppGlobalValue :: LLVMValue -> Doc  
+ppGlobalValue r@(LLVMRegister typ reg (TagGlobal linkage Nothing)) = 
+        ppValWOtyp r <+> equals <+> pp linkage <+> 
+        pp (if isPtr typ then drop1Ptr typ else typ)
+ppGlobalValue r@(LLVMRegister typ reg (TagGlobal linkage (Just init))) = 
+        ppValWOtyp r <+> equals <+> pp linkage <+> 
+        pp (if isPtr typ then drop1Ptr typ else typ) <+> pp init
+       
 ppValWOtyp :: LLVMValue -> Doc
-ppValWOtyp (LLVMRegister _ reg global) = 
-    (if global then text "@" else text "%") <> text reg
+ppValWOtyp (LLVMRegister _ reg (TagGlobal _ _)) = text "@" <> text reg
+ppValWOtyp (LLVMRegister _ reg TagLocal) = text "%" <> text reg
 ppValWOtyp (LLVMConstant typ const) = text (show const)
 
 ppBinInstruction :: String -> LLVMValue -> LLVMValue -> LLVMValue -> Doc
@@ -64,7 +80,7 @@ ppCommaSepVals [] = text ""
 ppCommaSepVals xs = text $ concat (intersperse ", " [ showWtyp x | x <- xs])
 
 newline :: Doc
-newline = char '\n'
+newline = text "\n"
 
 at :: Doc
 at = char '@'
@@ -105,7 +121,11 @@ instance PP LLVMTopLevelConstant where
         ppValWOtyp reg <+> equals <+> pp linkage <+> ppValWtyp val
 
 instance PP LLVMFunction where
-    pp (LLVMFunction fname rettyp params code) = 
+    pp (LLVMFunction fname (Just cc) rettyp params code) = 
+        text "define" <+> text (show cc) <+> pp rettyp <+> at <> text fname <>
+        lparen <> ppParams params <> rparen <> space <> lbrace $$
+        nest 8 (vcat $ map pp code) $$ rbrace <> newline
+    pp (LLVMFunction fname Nothing rettyp params code) = 
         text "define" <+> pp rettyp <+> at <> text fname <>
         lparen <> ppParams params <> rparen <> space <> lbrace $$
         nest 8 (vcat $ map pp code) $$ rbrace <> newline
@@ -175,4 +195,4 @@ instance PP LLVMInstruction where
 
 
 ppCommaSepLabels [] = text ""    
-ppCommaSepLabels lls = text $ concat (intersperse ", " [ (showWtyp val) ++ ", label %" ++ show lab | (val,lab) <- lls])
+ppCommaSepLabels lls = text $ concat (intersperse ", " [ showWtyp val ++ ", label %" ++ show lab | (val,lab) <- lls])
