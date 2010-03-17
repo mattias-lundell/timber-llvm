@@ -15,8 +15,13 @@ Furthermore, to compile the grammar (Parser.y into Parser.hs) you'll need
 
    happy (haskell.org/happy)
 
-Version numbers known to work are ghc 6.10.1, happy 1.17, and gcc 4.0.
+To use the LLVM backend you'll need
 
+   LLVM  (llvm.org/)
+   clang (clang.llvm.org/)
+
+Version numbers known to work are ghc 6.10.1, happy 1.17, gcc 4.0, LLVM 2.6, 
+and clang 1.1.
 
 Installing
 =============
