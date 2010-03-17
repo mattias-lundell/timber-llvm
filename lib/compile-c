@@ -1,7 +1,0 @@
-#!/bin/bash
-
-file=`basename $1 .c`
-
-#/home/capitrane/local/llvm-gcc/bin/llvm-gcc -DPOSIX -c  -g -m32 -pthread -D_GNU_SOURCE=1  -I /home/capitrane/installed/timber//share/timberc-1.0.3/lib  -I /home/capitrane/installed/timber//share/timberc-1.0.3/include  -I /home/capitrane/installed/timber//share/timberc-1.0.3/rtsPOSIX  -I . $file.c
-
-llvmc -emit-llvm -DPOSIX -c  -g -m32 -pthread -D_GNU_SOURCE=1  -I /home/capitrane/installed/timber//share/timberc-1.0.3/lib  -I /home/capitrane/installed/timber//share/timberc-1.0.3/include  -I /home/capitrane/installed/timber//share/timberc-1.0.3/rtsPOSIX  -I . $file.c
