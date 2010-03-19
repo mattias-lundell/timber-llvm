@@ -36,7 +36,7 @@ k2llvmModule (Core.Module _ _ _ es' _ _ [bs']) dsi (Module moduleName importName
   -- struct declarations
   k2llvmStructDecls (decls ++ ktypedEs)
   mapM_ (\(sname,_) -> 
-             addExternalGC (k2llvmName sname) (Tarray 0 int)) ktypedEs 
+             addExternalGC (k2llvmName sname) (array 0 int)) ktypedEs 
   k2llvmAddExternals (ktypedEf ++ es)
   k2llvmAddGlobalVars binds
   k2llvmHarvestFunTypes binds
@@ -52,7 +52,7 @@ k2llvmAddExternals binds = mapM_ f binds
         let outtyp' = k2llvmType outtyp
             intyps' = map k2llvmType intyps
             fname'  = k2llvmName fname
-        addFunType fname' (Tptr (Tfun outtyp' intyps'))
+        addFunType fname' (ptr (fun outtyp' intyps'))
         addExternalFun fname' outtyp' intyps'
       f (vname, ValT vtyp) = do
         let vname' = k2llvmName vname 
@@ -61,22 +61,25 @@ k2llvmAddExternals binds = mapM_ f binds
                      (TagGlobal [External,Global] Nothing)
         addGlobalVar vname' reg
 
--- Add struct binds
+-- | Generate type aliases for all struct declarations
 k2llvmStructDecls sdecls = mapM_ f sdecls
     where 
       f (sname, Struct _ vars _) = do 
         let sname' = k2llvmName sname
-            vars' = fixvars sname' vars
+            vars' = map (fixvars sname') vars
         addStruct sname' vars'
-      fixvars _ [] = []
-      fixvars sname ((name, ValT typ) : rest) = 
-          (k2llvmName name, k2llvmType typ) : fixvars sname rest
-      fixvars sname ((name, FunT _ argtyps restyp) : rest) = 
-          (k2llvmName name, Tptr (Tfun (k2llvmType restyp) (Tptr (Tstruct sname) : map k2llvmType argtyps))) : fixvars sname rest
+      fixvars sname (name, ValT typ) = (k2llvmName name, k2llvmType typ)
+      fixvars sname (name, FunT _ argtyps restyp) = 
+          (k2llvmName name, ptr (fun (k2llvmType restyp) 
+                                (ptr (struct sname) : map k2llvmType argtyps)))
 
--- | Harvest all functions types from the current file
+-- | Harvest all functions types from the current file, llvm needs type 
+--   information when generating function calls
 k2llvmHarvestFunTypes binds = mapM_ f binds
-    where f (fname, Fun _ atype atenv _) = addFunType (k2llvmName fname) (ptr (Tfun (k2llvmType atype) (map k2llvmType (snd (unzip atenv)))))
+    where f (fname, Fun _ atype atenv _) = 
+              addFunType (k2llvmName fname) 
+                         (ptr (fun (k2llvmType atype) 
+                                   (map k2llvmType (snd (unzip atenv)))))
           f _ = return ()
 
 -- Bind struct fields
@@ -105,21 +108,13 @@ k2llvmStructBinds var ntype bind = mapM_ f bind
         r1 <- getelementptr typ [intConst offset] r0 
         if k2llvmName ntype == "CLOS" 
             then do
-              freg' <- bitcast (ptr (Tfun void [])) freg 
+              freg' <- bitcast (ptr (fun void [])) freg 
               store freg' r1
             else store freg r1
       f (x,_) = internalError0 ("k2llvmStructBinds " ++ show x)
 
-gcArray v (EVar x) 
-    | x == v = do
-         size <- getStructSize (Tstruct (k2llvmName v))
-         return $ intConst (LLVMKindle.words size)
-    | otherwise = do
-         offset <- getStructOffset (Tstruct (k2llvmName v)) (k2llvmName x)
-         return $ intConst (LLVMKindle.words offset)
-gcArray v (ELit lit) = return $ lit2const lit
-
--- Add global varaibles from the current module
+-- | Add global variables from the current module, they must be avilible
+--   when generating function code.
 k2llvmAddGlobalVars binds = mapM_ f binds
     where
       f (vname, Val atype exp) = do
@@ -136,20 +131,56 @@ k2llvmAddGlobalVars binds = mapM_ f binds
                                   (Just Zeroinitializer)))
       f _ = return ()
 
--- Process toplevel bindings
+-- | Process toplevel bindings
 k2llvmTopBinds binds = mapM_ f binds
+          -- Generate code for a function
     where f b@(fname, Fun [] funtyp typenv cmds) = do
-            globals <- cgmGets cgmGlobals 
+            -- Initiate local variable context with all globals
+            globals <- cgmGets cgmGlobals
             cgfPut (cgf0 (k2llvmName fname) globals)
+            -- Add function parameters
+            -- CLEAN create registers, not list with tuples
             params <- atenv2params typenv
             mapM_ addParams params
+            -- Generate code
             k2llvmCmd cmds
+            -- Add unreachable (if function ends with a function call)
             unreachable
             addCurrFunction (k2llvmType funtyp) params
+          -- Create GCINFO array 
           f b@(vname, Val _ (ECall (Prim GCINFO _) [] vs@(EVar v : _))) = do
             vals <- mapM (gcArray v) vs
-            addLocalGC (Tarray (length vals) int) (k2llvmName vname) vals
+            addLocalGC (array (length vals) int) (k2llvmName vname) vals
           f _ = return ()
+
+atenv2params :: ATEnv -> CodeGen [(String,LLVMType)]
+atenv2params ps = return [(k2llvmName v, k2llvmType typ) | (v,typ) <- ps]
+
+-- | Add function parameters, all parameters are allocated in the toplevel
+--   basic block, this way llvm handles conversation from memory to register.
+--   when using -mem2reg optimization pass. 
+addParams (var,typ) = do
+  reg <- getNewNamedReg var typ
+  case typ of
+    (Tptr (Tstruct _)) -> do
+               r1 <- alloca typ
+               store reg r1
+               addVar var r1
+    _         -> do
+               r1 <- alloca typ
+               store reg r1
+               addVar var r1
+
+-- | Generate llvm representation of a GC array
+gcArray v (EVar x) 
+    | x == v = do
+         size <- getStructSize (struct (k2llvmName v))
+         return $ intConst (LLVMKindle.words size)
+    | otherwise = do
+         offset <- getStructOffset (struct (k2llvmName v)) (k2llvmName x)
+         return $ intConst (LLVMKindle.words offset)
+gcArray v (ELit lit) = return $ lit2const lit
+
 
 k2llvmValBinds (_,binds) = mapM_ f binds >> mapM_ g binds
     where f (vname, Val vtyp (ENew ntyp [] binds)) = do
@@ -161,7 +192,7 @@ k2llvmValBinds (_,binds) = mapM_ f binds >> mapM_ g binds
             addVar name r1
           f (vname, Val vtyp (ECast _ (ENew ntyp [] binds))) = do
             let objtyp = k2llvmType vtyp
-                castyp = Tstruct (k2llvmName ntyp)
+                castyp = struct (k2llvmName ntyp)
                 sname  = k2llvmName ntyp
                 vname' = k2llvmName vname
             var <- lookupVar vname'
@@ -193,18 +224,6 @@ k2llvmValBinds (_,binds) = mapM_ f binds >> mapM_ g binds
               k2llvmStructBinds (ECast (tCon ntyp) (EVar vname)) ntyp binds
           g _ = return ()
 
-addParams (var,typ) = do
-  reg <- getNewNamedReg var typ
-  case typ of
-    (Tptr (Tstruct _)) -> do
-               r1 <- alloca typ
-               store reg r1
-               addVar var r1
-    _         -> do
-               r1 <- alloca typ
-               store reg r1
-               addVar var r1
-
 bindGCINFO r0 typ exp = do
   let typ = getTyp r0
       typ_noptr@(Tstruct sname) = dropPtrs typ  
@@ -219,15 +238,10 @@ bindGCINFO r0 typ exp = do
                   LLVMRegister typ name tag <- getVar ("__GC__" ++ sname)
                   let r1 = LLVMRegister (ptr (dropPtrs typ)) name tag
                   r2 <- k2llvmExp (head exp)
-                  r3 <- getelementptr int [intConst 0] r1
-                  r4 <- ptrtoint int r3
-                  r5 <- add r4 r2
-                  r6 <- inttoptr poly r5
-                  r7 <- getstructelemptr "GCINFO" r0
-                  store r6 r7                   
-
-atenv2params :: ATEnv -> CodeGen [(String,LLVMType)]
-atenv2params ps = return [(k2llvmName v, k2llvmType typ) | (v,typ) <- ps]
+                  r3 <- ptrtoint int =<< getelementptr int [intConst 0] r1
+                  r4 <- inttoptr poly =<< add r3 r2
+                  r5 <- getstructelemptr "GCINFO" r0
+                  store r4 r5                   
     
 lit2const (LInt _ n) = intConst n
 lit2const (LChr _ c) = charConst c
@@ -319,6 +333,7 @@ k2llvmCmd (CWhile exp1 cmd1 cmd2) = do
   k2llvmCmd cmd2                             
 k2llvmCmd CCont = getContinueLabel >>= br
 
+-- XXX boilerplate switch code
 k2llvmFloatSwitch e (ALit lit cmd : alts) = do
   trueBlock  <- getNextLabel
   falseBlock <- getNextLabel
@@ -331,7 +346,7 @@ k2llvmFloatSwitch e (ALit lit cmd : alts) = do
   dropBreakLabel
   k2llvmFloatSwitch e alts
 k2llvmFloatSwitch e [AWild cmd] = k2llvmNestIfCmd cmd
-                                  
+-- XXX boilerplate switch code    
 k2llvmStringSwitch e (ALit (LStr _ lit) cmd : alts) = do
   trueBlock  <- getNextLabel
   falseBlock <- getNextLabel
@@ -345,7 +360,7 @@ k2llvmStringSwitch e (ALit (LStr _ lit) cmd : alts) = do
   dropBreakLabel
   k2llvmStringSwitch e alts
 k2llvmStringSwitch _ [AWild cmd] = k2llvmNestIfCmd cmd
-
+-- XXX boilerplate switch code
 k2llvmIntSwitch e (ALit lit cmd : alts) = do
   trueBlock  <- getNextLabel
   falseBlock <- getNextLabel
@@ -378,8 +393,7 @@ k2llvmExp (ESel (ECast (TCon n _) exp) name) | isBigTuple n = do
   -- i.e. only up to 26-tuples
   let offset = ord (head (show name)) - 96
   -- the "2" is used to direct into the elem part of the struct
-  r2 <- getelementptr poly [intConst 2,intConst offset] r1
-  load r2
+  getelementptr poly [intConst 2,intConst offset] r1 >>= load
     where 
       isBigTuple n = isTuple n && width n > 4
 -- select on casted struct
@@ -387,7 +401,7 @@ k2llvmExp (ESel (ECast atype exp) name) = do
   -- perform cast from struct to struct
   let totype@(Tptr totype_noptr) = k2llvmType atype
   -- cast 
-  r2 <- (k2llvmExp exp >>= bitcast totype)
+  r2 <- bitcast totype =<< k2llvmExp exp
   -- get type and offset
   (offset,typ) <- getStructIndex totype_noptr (k2llvmName name)
   getelementptr typ [intConst offset] r2 >>= load
@@ -401,19 +415,17 @@ k2llvmExp (ECall name atypes exps) = codeGenECall name exps
 k2llvmExp (EEnter (ECast clos@(TCon (Prim CLOS _) (rettyp:typs)) fun) fname atypes exps) = do
   let rettyp' = k2llvmType rettyp
       (Tptr typ_noptr) = k2llvmType clos
-      funtyp = Tptr (Tfun rettyp' (map k2llvmType (clos:typs)))
+      funtyp = ptr (Tfun rettyp' (map k2llvmType (clos:typs)))
   funAddr <- k2llvmExp fun
   (offset,typ) <- getStructIndex typ_noptr (k2llvmName fname)
-  r1 <- getelementptr typ [intConst offset] funAddr 
-  r2 <- load r1
-  r3 <- bitcast funtyp r2
+  r1 <- bitcast funtyp =<< load =<< getelementptr typ [intConst offset] funAddr
   exps' <- mapM k2llvmExp exps
-  callhigher r3 funtyp (funAddr:exps')
+  callhigher r1 funtyp (funAddr:exps')
 k2llvmExp (EEnter exp fname atypes exps) = do
   r1 <- k2llvmExp exp                              
   let typ@(Tptr typ_noptr) = getTyp r1                              
   (offset,typ) <- getStructIndex typ_noptr (k2llvmName fname)
-  r3 <- (getelementptr typ [intConst offset] r1 >>= load)
+  r3 <- load =<< getelementptr typ [intConst offset] r1
   exps' <- mapM k2llvmExp (exp:exps)                              
   callhigher r3 typ exps'
 -- many forms of casts, must keep track of types for example zext can only be 
@@ -607,6 +619,8 @@ codeGenECall (Prim name _) exps
                     MicrosecOf -> mapM k2llvmExp exps >>= call "microsecOf"
                     SecOf      -> mapM k2llvmExp exps >>= call "secOf"
                     Refl       -> mapM k2llvmExp exps >>= call "primRefl"
+                    -- Get new timer
+                    TIMERTERM  -> mapM k2llvmExp exps >>= call "primTIMERTERM"
                     -- Pid comparison
                     PidEQ      -> primIcmp IcmpEQ exps
                     PidNE      -> primIcmp IcmpNE exps
@@ -628,7 +642,6 @@ codeGenECall (Prim name _) exps
                     -- Various functions
                     Raise      -> mapM k2llvmExp exps >>= call "Raise"
                     Abort      -> mapM k2llvmExp exps >>= call "ABORT"
-                    TIMERTERM  -> mapM k2llvmExp exps >>= call "primTIMERTERM"
                     _ -> fail $ show name ++ " " ++ show exps
 codeGenECall name exps = do
   exps' <- mapM k2llvmExp exps

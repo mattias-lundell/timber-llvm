@@ -21,16 +21,16 @@ instance Show LLVMVisibilityStyle where
     show Hidden    = "hidden"
     show Protected = "protected" 
 
-data LLVMLinkage = Private
-                 | LinkerPrivate
-                 | Internal
+data LLVMLinkage = Private 
+                 | LinkerPrivate 
+                 | Internal 
                  | AvailableExternally
-                 | Linkonce
-                 | Weak
-                 | Common
-                 | Appending
+                 | Linkonce 
+                 | Weak 
+                 | Common 
+                 | Appending 
                  | ExternWeak
-                 | LinkonceOdr
+                 | LinkonceOdr 
                  | WeakOdr
                  | External
                  | Global   -- not a real linkage
@@ -344,6 +344,7 @@ data LLVMInstruction where
     Ret         :: LLVMValue -> LLVMInstruction
     Condbr      :: LLVMValue -> LLVMLabel -> LLVMLabel -> LLVMInstruction
     Uncondbr    :: LLVMLabel -> LLVMInstruction
-    Lab         :: LLVMLabel  -> LLVMInstruction
     Unreachable :: LLVMInstruction
+    -- Label are not instructions in llvm
+    Lab :: LLVMLabel  -> LLVMInstruction
                      deriving (Eq,Show)

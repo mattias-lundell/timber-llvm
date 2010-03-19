@@ -72,10 +72,6 @@ ppCastInstruction name res op1 typ =
     ppValWOtyp res <+> equals <+> text name <+> 
     ppValWtyp op1 <+> text "to" <+> pp typ
 
-ppCommaSepVals :: [LLVMValue] -> Doc
-ppCommaSepVals [] = text ""
-ppCommaSepVals xs = text $ intercalate ", " [ showWtyp x | x <- xs]
-
 newline :: Doc
 newline = char '\n'
 
@@ -157,37 +153,62 @@ instance PP LLVMInstruction where
     pp (Inttoptr res op1 typ) = ppCastInstruction "inttoptr" res op1 typ
     pp (Bitcast res op1 typ)  = ppCastInstruction "bitcast"  res op1 typ
     -- memory related instructions 
-    pp (Alloca res typ) = ppValWOtyp res <+> equals <+> text "alloca" <+> pp typ
-    pp (Malloc res typ) = ppValWOtyp res <+> equals <+> text "malloc" <+> pp typ
-    pp (Load res op1)   = ppValWOtyp res <+> equals <+> text "load" <+> ppValWtyp op1
+    pp (Alloca res typ) = ppValWOtyp res <+> equals <+> 
+                          text "alloca" <+> pp typ
+    pp (Load res op1)   = ppValWOtyp res <+> equals <+> 
+                          text "load" <+> ppValWtyp op1
     pp (Store res op1)  = text "store" <+> ppValWtyp res <+> comma <+> ppValWtyp op1
     pp (Extractelement res op1 index) = 
-        ppValWOtyp res <+> equals <+> text "extractelement" <+> ppValWtyp op1 <> comma <+> ppValWtyp index
+        ppValWOtyp res <+> equals <+> text "extractelement" <+> 
+        ppValWtyp op1 <> comma <+> ppValWtyp index
     pp (Insertelement  res op1 op2 index) = 
-        ppValWOtyp res <+> equals <+> text "insertelement" <+> ppValWtyp op1 <> comma <+> ppValWtyp op2 <> comma <+> ppValWtyp index
+        ppValWOtyp res <+> equals <+> text "insertelement" <+> 
+        ppValWtyp op1 <> comma <+> ppValWtyp op2 <> comma <+> ppValWtyp index
     pp (Shufflevector  res op1 op2 op3) = 
-        ppValWOtyp res <+> equals <+> text "shufflevetor" <+> ppValWtyp op1 <+> comma <> comma <+> ppValWtyp op2 <> comma <+> ppValWtyp op3
+        ppValWOtyp res <+> equals <+> text "shufflevetor" <+> 
+        ppValWtyp op1 <+> comma <> comma <+> ppValWtyp op2 <> 
+        comma <+> ppValWtyp op3
     -- getelement
     pp (Getelementptr res op1 offset) = 
-        ppValWOtyp res <+> equals <+> text "getelementptr" <+> ppValWtyp op1 <+> comma <+> ppValWtyp (intConst 0) <> comma <+> ppCommaSepVals offset
+        ppValWOtyp res <+> equals <+> text "getelementptr" <+> 
+        ppValWtyp op1 <+> comma <+> ppValWtyp (intConst 0) <> 
+        comma <+> ppCommaSepVals offset
     -- comapre
-    pp (Icmp res cmp op1 op2) = ppValWOtyp res <+> equals <+> text "icmp" <+> pp cmp <+> ppValWtyp op1 <> comma <+> ppValWOtyp op2
-    pp (Fcmp res cmp op1 op2) = ppValWOtyp res <+> equals <+> text "fcmp" <+> pp cmp <+> ppValWtyp op1 <> comma <+> ppValWOtyp op2
+    pp (Icmp res cmp op1 op2) = 
+        ppValWOtyp res <+> equals <+> text "icmp" <+> 
+        pp cmp <+> ppValWtyp op1 <> comma <+> ppValWOtyp op2
+    pp (Fcmp res cmp op1 op2) = 
+        ppValWOtyp res <+> equals <+> text "fcmp" <+> pp cmp <+> 
+        ppValWtyp op1 <> comma <+> ppValWOtyp op2
     -- branch
-    pp (Switch op defaultLabel lls) = text "switch" <+> ppValWtyp op <> comma <+> text "label %" <> text (show defaultLabel) <+> text "[" <+> ppCommaSepLabels lls <+> text "]" 
-    pp (Condbr op l1 l2) = text "br" <+> pp (Tint 1) <+> ppValWOtyp op <> comma <+> text "label %" <> text (show l1) <> comma <+> text "label %" <> text (show l2)
+    pp (Switch op defaultLabel lls) = 
+        text "switch" <+> ppValWtyp op <> comma <+> text "label %" <> 
+        text (show defaultLabel) <+> text "[" <+> ppCommaSepLabels lls <+> 
+        text "]" 
+    pp (Condbr op l1 l2) = 
+        text "br" <+> pp (Tint 1) <+> ppValWOtyp op <> comma <+> 
+        text "label %" <> text (show l1) <> comma <+> text "label %" <> 
+        text (show l2)
     pp (Uncondbr label)  = text "br" <+> text "label %" <> text (show label)
     -- return
     pp (Ret op1) = text "ret" <+> ppValWtyp op1
     -- call
-    pp (Call Nothing Tvoid name args)    = text "call void @" <> text name <> lparen <> ppCommaSepVals args <> rparen
-    pp (Call (Just res) typ name args)   = ppValWOtyp res <+> equals <+> text "call" <+> pp typ <+> text "@" <> text name <> lparen <> ppCommaSepVals args <> rparen
-    pp (Callhigher res typ funAddr args) = ppValWOtyp res <+> equals <+> text "call" <+> pp typ <+> ppValWOtyp funAddr <> lparen <> ppCommaSepVals args <> rparen
+    pp (Call Nothing Tvoid name args) = 
+        text "call void @" <> text name <> lparen <> 
+        ppCommaSepVals args <> rparen
+    pp (Call (Just res) typ name args) = 
+        ppValWOtyp res <+> equals <+> text "call" <+> pp typ <+> text "@" <> 
+        text name <> lparen <> ppCommaSepVals args <> rparen
+    pp (Callhigher res typ funAddr args) = 
+        ppValWOtyp res <+> equals <+> text "call" <+> pp typ <+> 
+        ppValWOtyp funAddr <> lparen <> ppCommaSepVals args <> rparen
     -- label -}
     pp (Lab l) = nest (-4) (text (show l)) <> colon
     -- unreachable
     pp Unreachable = text "unreachable" 
 
-
 ppCommaSepLabels [] = text ""    
-ppCommaSepLabels lls = text $ intercalate " " [ showWtyp val ++ ", label %" ++ show lab | (val,lab) <- lls]
+ppCommaSepLabels lls =  text $ intercalate " " [ showWtyp val ++ ", label %" ++ show lab | (val,lab) <- lls]
+
+ppCommaSepVals [] = text ""
+ppCommaSepVals xs = text $ intercalate ", " [ showWtyp x | x <- xs]

@@ -187,7 +187,7 @@ linkBC global_cfg clo r bc_files = do
              ++ " -r -o " ++ bc_file
       -- apply llvm optimizations
       cmd2 = llvmOPT cfg
-             ++ " -mem2reg -deadtypeelim -std-compile-opts -std-link-opts -time-passes "
+             ++ " -mem2reg -adce -strip-dead-prototypes -deadtypeelim -std-compile-opts -std-link-opts -time-passes "
              ++ llvmOptFlags clo ++ " "
              ++ bc_file
              ++ " -f -o " 

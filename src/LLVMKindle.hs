@@ -7,7 +7,7 @@ import LLVM
 import Common 
 import Kindle hiding (unit)
 import Name hiding (name)
-import Control.Monad.State -- hiding (get, put)
+import Control.Monad.State
 import qualified Data.Map as Map 
 import Data.List hiding (lookup, words)
 import Prelude hiding (lookup, words)
@@ -29,6 +29,8 @@ cgfGets   = gets
 cgfModify = modify
 cgfPut    = put
 
+-- | CGM - CodeGenModule
+--   State containing module information
 data CGM = CGM {
       -- name of the module
       cgmName       :: String,
@@ -41,7 +43,7 @@ data CGM = CGM {
       -- external functions                       
       cgmEFunctions :: DL.DList LLVMFunctionDecl,
       -- functions already processed
-      cgmLFunctions :: DL.DList LLVMFunction, -- Map.Map String LLVMFunction,
+      cgmLFunctions :: DL.DList LLVMFunction,
       -- named types
       cgmTypeDefs   :: Map.Map String LLVMStructDef,
       -- lookup type of a field in a struct
@@ -62,6 +64,8 @@ cgm0 name = CGM {
       cgmStringId   = 0
     }
 
+-- | CGF - CodeGenFunction
+--   State containing function information
 data CGF = CGF {
       -- name of function
       cgfName          :: String,
@@ -88,6 +92,10 @@ cgf0 name globals = CGF {
       cgfCode          = DL.empty,
       cgfVarEnv        = globals
     }
+
+-- =============================================================================
+-- Getters and setters
+-- =============================================================================
 
 getModule :: CodeGen LLVMModule
 getModule = do
@@ -154,8 +162,7 @@ setFname n = cgfModify (\s -> s {cgfName = n})
 
 lookup k m = case Map.lookup k m of
                Just a -> return a
-               Nothing -> 
-                   fail $ "key : " ++ show k ++ " not found in: " ++ show m
+               Nothing -> internalError0 $ "key : " ++ show k ++ "\n not found in:\n" ++ show m
 
 getNewReg :: LLVMType -> CodeGen LLVMValue
 getNewReg typ = do
@@ -252,7 +259,7 @@ getStructOffset styp fname = do
   (offset,_) <- getStructIndex styp fname
   calcStructSize (take offset (sort ((snd.unzip) (Map.toList struct))))
 
--- used for "continue"-call in a while loop
+-- used for "continue" statements
 getContinueLabel :: CodeGen LLVMLabel
 getContinueLabel = fmap head (cgfGets cgfContinueLabel)
 
@@ -262,6 +269,7 @@ addContinueLabel lab = cgfModify (\s -> s { cgfContinueLabel = lab : cgfContinue
 dropContinueLabel :: CodeGen ()
 dropContinueLabel = cgfModify (\s -> s { cgfContinueLabel = tail (cgfContinueLabel s) })
 
+-- used for "break" statements
 getBreakLabel :: CodeGen LLVMLabel
 getBreakLabel = fmap head (cgfGets cgfBreakLabel)
 
@@ -270,7 +278,6 @@ addBreakLabel lab = cgfModify (\s -> s { cgfBreakLabel = lab : cgfBreakLabel s }
 
 dropBreakLabel :: CodeGen ()
 dropBreakLabel = cgfModify (\s -> s { cgfBreakLabel = tail (cgfBreakLabel s) })
-
 
 addVar :: String -> LLVMValue -> CodeGen ()
 addVar var reg = 
@@ -285,7 +292,6 @@ lookupVar :: String -> CodeGen (Maybe LLVMValue)
 lookupVar var = do
   env <- cgfGets cgfVarEnv
   return (Map.lookup var env)
-
 
 -- get result type of a function
 getResType :: String -> CodeGen LLVMType
@@ -304,7 +310,6 @@ getExternalGC styp = cgmGets cgmGlobals >>= lookup styp
 -- HELPERS
 -- =============================================================================
 
---calcStructSize :: forall a . [(a,LLVMType)] -> CGState Int
 calcStructSize [] = return 0
 calcStructSize ((_,typ):rest) = do 
   size <- typeSize typ 
@@ -450,7 +455,6 @@ dropPtrs :: LLVMType -> LLVMType
 dropPtrs (Tptr t) = dropPtrs t
 dropPtrs t       = t
 
-
 -- =============================================================================
 -- Create LLVM constants of common types
 -- =============================================================================
@@ -592,8 +596,6 @@ insertelement  op1 op2 op3 = do
   r1 <- getNewReg (getTyp op1)
   emit $ Insertelement r1 op1 op2 op3
   return r1
-
-switch e exitlabel alts = emit $ Switch e exitlabel alts
 
 -- Transform kindle-types into a llvm representation
 k2llvmType :: AType -> LLVMType
