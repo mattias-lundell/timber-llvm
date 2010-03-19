@@ -142,7 +142,6 @@ data LLVMModule          = LLVMModule { modName     :: String,
                                         modTopConst :: [LLVMTopLevelConstant],
                                         modFuns     :: [LLVMFunction] }
 
-data LLVMGlobal           = LLVMGlobal LLVMValue [LLVMLinkage] (Maybe LLVMGlobalInitializer) deriving (Show)
 data LLVMFunctionDecl     = LLVMFunctionDecl [LLVMLinkage] String LLVMType deriving (Show)
 data LLVMTopLevelConstant = LLVMTopLevelConstant LLVMValue [LLVMLinkage] LLVMValue deriving (Show)
 data LLVMFunction         = LLVMFunction String (Maybe LLVMCallingConvention) LLVMType [(String,LLVMType)] [LLVMInstruction] deriving (Show)
@@ -158,7 +157,6 @@ data LLVMValue = LLVMRegister LLVMType String LLVMRegisterTag
                  deriving (Eq,Show)
 
 data LLVMRegisterTag = TagGlobal [LLVMLinkage] (Maybe LLVMGlobalInitializer)
---                     | TagInitialized LLVMValue
                      | TagLocal
                        deriving (Eq, Show)
 

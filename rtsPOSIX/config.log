@@ -128,7 +128,7 @@ configure: failed program was:
 configure:3276: result: no
 configure:3148: checking whether pthreads work without any flags
 configure:3246: gcc -o conftest -g -O2 -m32    conftest.c   >&5
-/tmp/ccmqeKeO.o: In function `main':
+/tmp/cc0FRKRe.o: In function `main':
 /home/capitrane/timber-llvm/rtsPOSIX/conftest.c:12: undefined reference to `pthread_join'
 /home/capitrane/timber-llvm/rtsPOSIX/conftest.c:13: undefined reference to `__pthread_register_cancel'
 /home/capitrane/timber-llvm/rtsPOSIX/conftest.c:14: undefined reference to `pthread_create'
@@ -157,7 +157,7 @@ configure:3276: result: no
 configure:3153: checking whether pthreads work with -Kthread
 configure:3246: gcc -o conftest -g -O2 -m32 -Kthread   conftest.c   >&5
 gcc: unrecognized option '-Kthread'
-/tmp/ccGWKZoZ.o: In function `main':
+/tmp/ccuWHeol.o: In function `main':
 /home/capitrane/timber-llvm/rtsPOSIX/conftest.c:12: undefined reference to `pthread_join'
 /home/capitrane/timber-llvm/rtsPOSIX/conftest.c:13: undefined reference to `__pthread_register_cancel'
 /home/capitrane/timber-llvm/rtsPOSIX/conftest.c:14: undefined reference to `pthread_create'
@@ -186,7 +186,7 @@ configure:3276: result: no
 configure:3153: checking whether pthreads work with -kthread
 configure:3246: gcc -o conftest -g -O2 -m32 -kthread   conftest.c   >&5
 gcc: unrecognized option '-kthread'
-/tmp/ccsjfuF7.o: In function `main':
+/tmp/ccSUzfbx.o: In function `main':
 /home/capitrane/timber-llvm/rtsPOSIX/conftest.c:12: undefined reference to `pthread_join'
 /home/capitrane/timber-llvm/rtsPOSIX/conftest.c:13: undefined reference to `__pthread_register_cancel'
 /home/capitrane/timber-llvm/rtsPOSIX/conftest.c:14: undefined reference to `pthread_create'

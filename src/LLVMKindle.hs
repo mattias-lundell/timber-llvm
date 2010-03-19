@@ -22,11 +22,12 @@ startCgf = flip evalStateT
 startCgm :: state -> State state a -> a
 startCgm = flip evalState
 
-getFunType :: String -> CodeGen LLVMType
-getFunType name = cgmGets cgmFunEnv >>= lookup name
+cgmGets   = lift . gets 
+cgmModify = lift . modify
 
-addFunType :: String -> LLVMType -> CodeGen ()
-addFunType name typ = cgmModify (\s -> s { cgmFunEnv = Map.insert name typ (cgmFunEnv s) })
+cgfGets   = gets
+cgfModify = modify
+cgfPut    = put
 
 data CGM = CGM {
       -- name of the module
@@ -44,7 +45,9 @@ data CGM = CGM {
       -- named types
       cgmTypeDefs   :: Map.Map String LLVMStructDef,
       -- lookup type of a field in a struct
-      cgmStructs    :: Map.Map LLVMType (Map.Map String (Int,LLVMType))
+      cgmStructs    :: Map.Map LLVMType (Map.Map String (Int,LLVMType)),
+      -- next unique string id
+      cgmStringId   :: Integer
     }
 
 cgm0 name = CGM {
@@ -55,46 +58,61 @@ cgm0 name = CGM {
       cgmEFunctions = DL.empty,
       cgmLFunctions = DL.empty,
       cgmTypeDefs   = Map.empty,
-      cgmStructs    = Map.empty
+      cgmStructs    = Map.empty,
+      cgmStringId   = 0
+    }
+
+data CGF = CGF {
+      -- name of function
+      cgfName          :: String,
+      -- next fresh register
+      cgfNextRegister  :: Integer,
+      -- next fresh label
+      cgfNextLabel     :: Integer,
+      -- handle loop lables, used when encounter continue statement
+      cgfContinueLabel :: [LLVMLabel],
+      -- handle loop lables, used when encounter break statement
+      cgfBreakLabel    :: [LLVMLabel],
+      -- current code
+      cgfCode          :: DL.DList LLVMInstruction,
+      -- map from variable to register
+      cgfVarEnv        :: Map.Map String LLVMValue
+    }
+
+cgf0 name globals = CGF {
+      cgfName          = name,
+      cgfNextRegister  = 0,
+      cgfNextLabel     = 0,
+      cgfContinueLabel = [],
+      cgfBreakLabel    = [],
+      cgfCode          = DL.empty,
+      cgfVarEnv        = globals
     }
 
 getModule :: CodeGen LLVMModule
 getModule = do
   name <- cgmGets cgmName
-  td'  <- cgmGets cgmTypeDefs
-  gs'  <- cgmGets cgmGlobals
-  fds' <- cgmGets cgmEFunctions
-  cs'  <- cgmGets cgmConstants
-  fs'  <- cgmGets cgmLFunctions
-  return $ LLVMModule name (Map.elems td') (filterLocalGC gs' cs') (DL.toList fds') (Map.elems cs') (DL.toList fs')
+  td   <- cgmGets cgmTypeDefs
+  gs   <- cgmGets cgmGlobals
+  fds  <- cgmGets cgmEFunctions
+  cs   <- cgmGets cgmConstants
+  fs   <- cgmGets cgmLFunctions
+  return $ LLVMModule name (Map.elems td) (filterLocalGC gs cs) 
+            (DL.toList fds) (Map.elems cs) (DL.toList fs)
          where
-           filterLocalGC gs cs = Map.elems (Map.filterWithKey (\x _ -> not (elem x (localGC cs))) gs)
-           --filterLocalGC = Map.elems . Map.filterWithKey (\x _ -> not (isPrefixOf "__GC__" x))
-           localGC cs = Map.keys . Map.filterWithKey (\x _ -> (isPrefixOf "__GC__" x)) $ cs
-                      
+           -- remove local gcinfo from globals
+           filterLocalGC gs cs = 
+               Map.elems (Map.filterWithKey 
+                          (\x _ -> x `notElem` localGC cs) gs)
+           -- get keys of all local gcinfo
+           localGC cs = Map.keys . Map.filterWithKey 
+                        (\x _ -> "__GC__" `isPrefixOf` x) $ cs
 
-data CGF = CGF {
-      -- name of function
-      cgfName         :: String,
-      -- next fresh register
-      cgfNextRegister :: Integer,
-      -- next fresh label
-      cgfNextLabel    :: Integer,
-      -- handle loop lables, used when encounter continue statement
-      cgfLoopLabel    :: [LLVMLabel],
-      -- current code
-      cgfCode         :: DL.DList LLVMInstruction,
-      cgfVarEnv       :: Map.Map String LLVMValue
-    }
+getFunType :: String -> CodeGen LLVMType
+getFunType name = cgmGets cgmFunEnv >>= lookup name
 
-cgf0 name globals = CGF {
-      cgfName         = name,
-      cgfNextRegister = 0,
-      cgfNextLabel    = 0,
-      cgfLoopLabel    = [],
-      cgfCode         = DL.empty,
-      cgfVarEnv       = globals
-    }
+addFunType :: String -> LLVMType -> CodeGen ()
+addFunType name typ = cgmModify (\s -> s { cgmFunEnv = Map.insert name typ (cgmFunEnv s) })
 
 getString :: String -> CodeGen LLVMValue
 getString s = do
@@ -115,10 +133,9 @@ addCurrFunction rettyp paramtypes = do
   let fun = LLVMFunction name  Nothing rettyp paramtypes (DL.toList code)
   cgmModify (\s -> s { cgmLFunctions = DL.snoc (cgmLFunctions s) fun })
 
-
 addGlobalVar :: String -> LLVMValue -> CodeGen ()
-addGlobalVar name reg  = do
-  cgmModify (\s -> s { cgmGlobals = Map.insert name reg (cgmGlobals s) })
+addGlobalVar name reg  = 
+    cgmModify (\s -> s { cgmGlobals = Map.insert name reg (cgmGlobals s) })
 
 getNextLabel :: CodeGen LLVMLabel
 getNextLabel = do
@@ -135,32 +152,20 @@ setMname n = cgmModify (\s -> s {cgmName = n})
 setFname :: String -> CodeGen ()
 setFname n = cgfModify (\s -> s {cgfName = n})
 
-lookup k m = do
-  case Map.lookup k m of
-    Just a -> return a
-    Nothing -> fail $ show k ++ show m
-    --let a = Map.lookup k m in
-    --return (fromJust a)
-                   
-cgmGets   = lift . gets 
-cgmModify = lift . modify
+lookup k m = case Map.lookup k m of
+               Just a -> return a
+               Nothing -> 
+                   fail $ "key : " ++ show k ++ " not found in: " ++ show m
 
-cgfGets   = gets
-cgfModify = modify
-cgfPut    = put
-
-getNewResReg :: LLVMType -> CodeGen LLVMValue
-getNewResReg typ = do
+getNewReg :: LLVMType -> CodeGen LLVMValue
+getNewReg typ = do
   register <- gets cgfNextRegister
   cgfModify (\s -> s { cgfNextRegister = cgfNextRegister s + 1 })
   fname <- cgfGets cgfName
   return $ LLVMRegister typ ("reg" ++  show register) TagLocal
 
-
-getNewNamedResReg :: String -> LLVMType -> CodeGen LLVMValue
-getNewNamedResReg name typ = do
-  return $ LLVMRegister typ name {-("reg" ++  show register)-} TagLocal
-
+getNewNamedReg :: String -> LLVMType -> CodeGen LLVMValue
+getNewNamedReg name typ = return $ LLVMRegister typ name TagLocal
 
 addCurrFunAndClean :: String -> LLVMType -> [(String,LLVMType)] -> CodeGen ()
 addCurrFunAndClean name rettyp paramtypes = do
@@ -182,7 +187,6 @@ addExternalGC name typ = do
 
 addLocalGC :: LLVMType -> String -> [LLVMValue] -> CodeGen ()
 addLocalGC typ name vals = do
-  --fail $ name
   let reg'  = LLVMRegister typ ("__GC__" ++ name) (TagGlobal [] Nothing)
       reg'' = LLVMRegister (ptr typ) ("__GC__" ++ name) (TagGlobal [] Nothing)
       var'  = LLVMConstant typ (ArrayConst vals)
@@ -193,13 +197,16 @@ addLocalGC typ name vals = do
 -- add strings to toplevel constants
 addString :: String -> CodeGen ()
 addString str = do
-  register <- gets cgfNextRegister
-  cgfModify (\s -> s { cgfNextRegister = cgfNextRegister s + 1 })
-  let reg' = LLVMRegister (ptr (Tarray (length str + 1) char)) ("str" ++ show register) (TagGlobal [] Nothing)
-      var' = LLVMConstant (Tarray (length str + 1) char) (StringConst str)
-      con' = LLVMTopLevelConstant reg' [Private,Constant] var'
-  cgmModify (\s -> s { cgmConstants = Map.insert str con' (cgmConstants s) })
-
+  constants <- cgmGets cgmConstants
+  case Map.lookup str constants of
+    Nothing -> do
+      sid <- cgmGets cgmStringId
+      cgmModify (\s -> s { cgmStringId = cgmStringId s + 1 })
+      let reg' = LLVMRegister (ptr (Tarray (length str + 1) char)) ("str" ++ show sid) (TagGlobal [] Nothing)
+          var' = LLVMConstant (Tarray (length str + 1) char) (StringConst str)
+          con' = LLVMTopLevelConstant reg' [Private,Constant] var'
+      cgmModify (\s -> s { cgmConstants = Map.insert str con' (cgmConstants s) })
+    Just _ -> return ()
 
 -- add stack allocations, all stack allocations are made in the beginning of each function.
 -- this way we can take advantage of the "mem2reg" pass
@@ -246,19 +253,28 @@ getStructOffset styp fname = do
   calcStructSize (take offset (sort ((snd.unzip) (Map.toList struct))))
 
 -- used for "continue"-call in a while loop
-getLoopLabel :: CodeGen LLVMLabel
-getLoopLabel = cgfGets cgfLoopLabel >>= return . head
+getContinueLabel :: CodeGen LLVMLabel
+getContinueLabel = fmap head (cgfGets cgfContinueLabel)
 
-addLoopLabel :: LLVMLabel -> CodeGen ()
-addLoopLabel lab = cgfModify (\s -> s { cgfLoopLabel = lab : cgfLoopLabel s })
+addContinueLabel :: LLVMLabel -> CodeGen ()
+addContinueLabel lab = cgfModify (\s -> s { cgfContinueLabel = lab : cgfContinueLabel s })
 
-dropLoopLabel :: CodeGen ()
-dropLoopLabel = cgfModify (\s -> s { cgfLoopLabel = tail (cgfLoopLabel s) })
+dropContinueLabel :: CodeGen ()
+dropContinueLabel = cgfModify (\s -> s { cgfContinueLabel = tail (cgfContinueLabel s) })
+
+getBreakLabel :: CodeGen LLVMLabel
+getBreakLabel = fmap head (cgfGets cgfBreakLabel)
+
+addBreakLabel :: LLVMLabel -> CodeGen ()
+addBreakLabel lab = cgfModify (\s -> s { cgfBreakLabel = lab : cgfBreakLabel s })
+
+dropBreakLabel :: CodeGen ()
+dropBreakLabel = cgfModify (\s -> s { cgfBreakLabel = tail (cgfBreakLabel s) })
+
 
 addVar :: String -> LLVMValue -> CodeGen ()
-addVar var reg = do
---  tr $ show var ++ show reg
-  modify (\s -> s { cgfVarEnv = Map.insert var reg (cgfVarEnv s) })
+addVar var reg = 
+    modify (\s -> s { cgfVarEnv = Map.insert var reg (cgfVarEnv s) })
 
 getVar :: String -> CodeGen LLVMValue
 getVar var = do
@@ -467,17 +483,17 @@ stringConst s = LLVMConstant (Tarray (length s) char) (StringConst s)
 -- =============================================================================
 
 emitBinaryOp instr op1 op2 = do
-  r1 <- getNewResReg (getTyp op1)
+  r1 <- getNewReg (getTyp op1)
   emit $ instr r1 op1 op2
   return r1
 
 emitCmpOp instr cmpop op1 op2 = do
-  r1 <- getNewResReg bool
+  r1 <- getNewReg bool
   emit $ instr r1 cmpop op1 op2
   return r1
 
 emitCast instr typ op1 = do
-  r1 <- getNewResReg typ
+  r1 <- getNewReg typ
   emit $ instr r1 op1 typ
   return r1
 
@@ -511,7 +527,7 @@ trunc typ@(Tint n) op1 = do
   if n == n' 
      then return op1 
      else do
-       r1 <- getNewResReg typ
+       r1 <- getNewReg typ
        emit $ Trunc r1 op1 typ
        return r1
 zext typ@(Tint n) op1 = do
@@ -519,12 +535,12 @@ zext typ@(Tint n) op1 = do
   if n == n' 
      then return op1 
      else do
-       r1 <- getNewResReg typ
+       r1 <- getNewReg typ
        emit $ Zext r1 op1 typ
        return r1
 
 load op1 = do
-  r1 <- getNewResReg ((drop1Ptr.getTyp) op1)
+  r1 <- getNewReg ((drop1Ptr.getTyp) op1)
   emit $ Load r1 op1
   return r1
 store op1 op2 = emit $ Store op1 op2
@@ -538,44 +554,46 @@ unreachable = emit Unreachable
 ret = emit . Ret
 retvoid = ret voidConst
 alloca typ = do
-  r1 <- getNewResReg (Tptr typ)
+  r1 <- getNewReg (Tptr typ)
   addAlloca r1
   return r1
 call fname exps = do
   resTyp <- getResType fname
-  r1 <- getNewResReg resTyp
+  r1 <- getNewReg resTyp
   emit $ Call (Just r1) resTyp fname exps
   return r1
 callvoid fname exps = emit $ Call Nothing Tvoid fname exps
 callhigher freg ftyp exps = do
   let (Tfun rtyp _) = dropPtrs ftyp
-  r2 <- getNewResReg rtyp
+  r2 <- getNewReg rtyp
   emit $ Callhigher r2 ftyp freg exps
   return r2
 getelementptr typ offset op1 = do
-  r1 <- getNewResReg (ptr typ)
+  r1 <- getNewReg (ptr typ)
   emit $ Getelementptr r1 op1 offset
   return r1
 getstructelemptr name op1 = do
   let styp = getTyp op1
   (offset,etyp) <- getStructIndex (dropPtrs styp) name
-  r1 <- getNewResReg (ptr etyp)
+  r1 <- getNewReg (ptr etyp)
   emit $ Getelementptr r1 op1 [intConst offset]
   return r1
 getarrayelemptr index op1 = do
   let (Tarray _ etyp) = dropPtrs $ getTyp op1
-  r1 <- getNewResReg (ptr etyp)
+  r1 <- getNewReg (ptr etyp)
   emit $ Getelementptr r1 op1 index
   return r1
 extractelement op1 op2 = do
   let (Tvector _ typ) = getTyp op1
-  r1 <- getNewResReg typ
+  r1 <- getNewReg typ
   emit $ Extractelement r1 op1 op2
   return r1           
 insertelement  op1 op2 op3 = do
-  r1 <- getNewResReg (getTyp op1)
+  r1 <- getNewReg (getTyp op1)
   emit $ Insertelement r1 op1 op2 op3
   return r1
+
+switch e exitlabel alts = emit $ Switch e exitlabel alts
 
 -- Transform kindle-types into a llvm representation
 k2llvmType :: AType -> LLVMType

@@ -44,9 +44,6 @@ ppType :: LLVMType -> Doc
 ppType (Tstruct sname) = text $ sname ++ "*"
 ppType typ = text $ show typ
 
-textConcat :: [String] -> Doc
-textConcat xs = text $ concat xs
-
 ppValWtyp :: LLVMValue -> Doc
 ppValWtyp r@(LLVMRegister typ _ _) = pp typ <+> ppValWOtyp r
 ppValWtyp (LLVMConstant Tvoid _)   = text "void"
@@ -77,10 +74,10 @@ ppCastInstruction name res op1 typ =
 
 ppCommaSepVals :: [LLVMValue] -> Doc
 ppCommaSepVals [] = text ""
-ppCommaSepVals xs = text $ concat (intersperse ", " [ showWtyp x | x <- xs])
+ppCommaSepVals xs = text $ intercalate ", " [ showWtyp x | x <- xs]
 
 newline :: Doc
-newline = text "\n"
+newline = char '\n'
 
 at :: Doc
 at = char '@'
@@ -103,15 +100,9 @@ instance PP [LLVMLinkage] where
 instance PP LLVMGlobalInitializer where
     pp init = text $ show init
 
-instance PP LLVMGlobal where
-    pp (LLVMGlobal val linkage Nothing) = 
-        ppValWOtyp val <+> equals <+> pp linkage <+> pp (getTyp val)
-    pp (LLVMGlobal val linkage (Just init)) = 
-        ppValWOtyp val <+> equals <+> pp linkage <+> pp (getTyp val) <+> pp init
-
 instance PP LLVMFunctionDecl where
     pp (LLVMFunctionDecl linkage fname (Tfun rettyp argtyps)) =
-        text "declare" <+> pp rettyp <+> at <> text fname <> parens (text $ concat $ intersperse ", " (map show argtyps))
+        text "declare" <+> pp rettyp <+> at <> text fname <> parens (text $ intercalate ", " (map show argtyps))
 
 instance PP LLVMTopLevelConstant where
     pp (LLVMTopLevelConstant reg linkage (LLVMConstant typ (StringConst s))) =
@@ -170,16 +161,20 @@ instance PP LLVMInstruction where
     pp (Malloc res typ) = ppValWOtyp res <+> equals <+> text "malloc" <+> pp typ
     pp (Load res op1)   = ppValWOtyp res <+> equals <+> text "load" <+> ppValWtyp op1
     pp (Store res op1)  = text "store" <+> ppValWtyp res <+> comma <+> ppValWtyp op1
-    pp (Extractelement res op1 index)     = ppValWOtyp res <+> equals <+> text "extractelement" <+> ppValWtyp op1 <> comma <+> ppValWtyp index
-    pp (Insertelement  res op1 op2 index) = ppValWOtyp res <+> equals <+> text "insertelement" <+> ppValWtyp op1 <> comma <+> ppValWtyp op2 <> comma <+> ppValWtyp index
-    pp (Shufflevector  res op1 op2 op3)   = ppValWOtyp res <+> equals <+> text "shufflevetor" <+> ppValWtyp op1 <+> comma <> comma <+> ppValWtyp op2 <> comma <+> ppValWtyp op3
+    pp (Extractelement res op1 index) = 
+        ppValWOtyp res <+> equals <+> text "extractelement" <+> ppValWtyp op1 <> comma <+> ppValWtyp index
+    pp (Insertelement  res op1 op2 index) = 
+        ppValWOtyp res <+> equals <+> text "insertelement" <+> ppValWtyp op1 <> comma <+> ppValWtyp op2 <> comma <+> ppValWtyp index
+    pp (Shufflevector  res op1 op2 op3) = 
+        ppValWOtyp res <+> equals <+> text "shufflevetor" <+> ppValWtyp op1 <+> comma <> comma <+> ppValWtyp op2 <> comma <+> ppValWtyp op3
     -- getelement
-    pp (Getelementptr res op1 offset) = ppValWOtyp res <+> equals <+> text "getelementptr" <+> ppValWtyp op1 <+> comma <+> ppValWtyp (intConst 0) <> comma <+> ppCommaSepVals offset
+    pp (Getelementptr res op1 offset) = 
+        ppValWOtyp res <+> equals <+> text "getelementptr" <+> ppValWtyp op1 <+> comma <+> ppValWtyp (intConst 0) <> comma <+> ppCommaSepVals offset
     -- comapre
     pp (Icmp res cmp op1 op2) = ppValWOtyp res <+> equals <+> text "icmp" <+> pp cmp <+> ppValWtyp op1 <> comma <+> ppValWOtyp op2
     pp (Fcmp res cmp op1 op2) = ppValWOtyp res <+> equals <+> text "fcmp" <+> pp cmp <+> ppValWtyp op1 <> comma <+> ppValWOtyp op2
     -- branch
-    pp (Switch op defaultLabel lls) = text "switch" <+> comma <+> text "label %" <> text (show defaultLabel) <+> text "[" <+> ppCommaSepLabels lls <+> text "]" 
+    pp (Switch op defaultLabel lls) = text "switch" <+> ppValWtyp op <> comma <+> text "label %" <> text (show defaultLabel) <+> text "[" <+> ppCommaSepLabels lls <+> text "]" 
     pp (Condbr op l1 l2) = text "br" <+> pp (Tint 1) <+> ppValWOtyp op <> comma <+> text "label %" <> text (show l1) <> comma <+> text "label %" <> text (show l2)
     pp (Uncondbr label)  = text "br" <+> text "label %" <> text (show label)
     -- return
@@ -195,4 +190,4 @@ instance PP LLVMInstruction where
 
 
 ppCommaSepLabels [] = text ""    
-ppCommaSepLabels lls = text $ concat (intersperse ", " [ showWtyp val ++ ", label %" ++ show lab | (val,lab) <- lls])
+ppCommaSepLabels lls = text $ intercalate " " [ showWtyp val ++ ", label %" ++ show lab | (val,lab) <- lls]

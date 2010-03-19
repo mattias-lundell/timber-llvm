@@ -110,9 +110,8 @@ data CmdLineOpts     = CmdLineOpts { isVerbose    :: Bool,
                                      dumpAfter    :: Pass -> Bool,
                                      stopAfter    :: Pass -> Bool,
                                      doLLVM       :: Bool,
-                                     llvmOptFlags :: String    
+                                     llvmOptFlags :: String   
                                    }
-
 
 options              :: [OptDescr Flag]
 options              = [ Option []
@@ -181,7 +180,7 @@ options              = [ Option []
                                 "Compile to LLVM",
                          Option []
                                 ["llvmopt"]
-                                (ReqArg LLVMOptFlags "[LLVM-flags]")
+                                (ReqArg LLVMOptFlags "LLVM-flag")
                                 "Provide LLVM optimization flags"
                        ]
                        ++ 
@@ -199,6 +198,7 @@ options              = [ Option []
                        | pass <- allPasses 
                        ]
                        
+
 
 
 data Flag            = Help

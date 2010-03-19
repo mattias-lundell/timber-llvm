@@ -66,7 +66,6 @@ link cfg clo files
     | doLLVM clo = linkBC cfg clo files
     | otherwise  = fail $ show files -- linkO cfg clo files
 
-
 compileLLVM global_cfg clo ll_file = do
   let bc_file = rmSuffix ".ll" ll_file ++ ".bc"
       s_file  = rmSuffix ".ll" (rmDirs ll_file) ++ ".s"
@@ -77,12 +76,12 @@ compileLLVM global_cfg clo ll_file = do
                let cmdLLVMAS = llvmLLVMAS cfg ++ " -f " ++ ll_file
                putStrLn ("[compiling " ++ ll_file ++ "]")
                execCmd clo cmdLLVMAS
-               let cmdLLC = llvmLLC cfg ++ bc_file ++ " -f -o " ++ s_file ++ " -march=x86"
-               putStrLn ("[compiling " ++ bc_file ++ "]")
-               execCmd clo cmdLLC
-               let cmdAS = llvmAS cfg ++ s_file ++ " -o " ++ o_file
-               putStrLn ("[compiling " ++ s_file ++ "]")
-               execCmd clo cmdAS              
+--               let cmdLLC = llvmLLC cfg ++ bc_file ++ " -f -o " ++ s_file ++ " -march=x86"
+--               putStrLn ("[compiling " ++ bc_file ++ "]")
+--               execCmd clo cmdLLC
+--               let cmdAS = llvmAS cfg ++ s_file ++ " -o " ++ o_file
+--               putStrLn ("[compiling " ++ s_file ++ "]")
+--               execCmd clo cmdAS              
              else return ()
   where checkUpToDate ll_file bc_file = do 
           bc_exists <- Directory.doesFileExist bc_file
@@ -121,8 +120,8 @@ compileLLVM global_cfg clo ll_file = do
 
 -- | Compile a C-file. 
 compileC global_cfg clo c_file = do 
-  let bc_file = rmSuffix ".c" (rmDirs c_file) ++ ".o"
-  res <- checkUpToDate c_file bc_file
+  let o_file = rmSuffix ".c" (rmDirs c_file) ++ ".o"
+  res <- checkUpToDate c_file o_file
   if not res then do
                putStrLn ("[compiling "++c_file++"]")
                cfg <- fileCfg clo c_file global_cfg
@@ -133,16 +132,15 @@ compileC global_cfg clo c_file = do
                          ++ " -I " ++ rtsDir clo ++ " " 
                          ++ " -I . "
                          ++ c_file
-                         --return ()
                execCmd clo cmd
              else return ()
-      where checkUpToDate c_file bc_file = do 
-                                   bc_exists <- Directory.doesFileExist bc_file
-                                   if not bc_exists then return False
+      where checkUpToDate c_file o_file = do 
+                                   o_exists <- Directory.doesFileExist o_file
+                                   if not o_exists then return False
                                                     else do
-                                                      c_time  <- Directory.getModificationTime c_file
-                                                      bc_time <- Directory.getModificationTime bc_file
-                                                      return (c_time <= bc_time)
+                                                      c_time <- Directory.getModificationTime c_file
+                                                      o_time <- Directory.getModificationTime o_file
+                                                      return (c_time <= o_time)
 
 {-
 -- | Compile a C-file. 
@@ -185,10 +183,10 @@ linkBC global_cfg clo r bc_files = do
       cmd1 = llvmLD cfg
              ++ rtsDir clo ++ "/libTimber.bc "
              ++ unwords bc_files
-             ++ " -o " ++ bc_file
+             ++ " -r -o " ++ bc_file
       -- apply llvm optimizations
       cmd2 = llvmOPT cfg
-             ++ " -mem2reg -deadtypeelim "
+             ++ " -mem2reg -deadtypeelim -std-compile-opts -std-link-opts -time-passes "
              ++ llvmOptFlags clo ++ " "
              ++ bc_file
              ++ " -f -o " 
