@@ -1,4 +1,4 @@
-{-# LANGUAGE  FlexibleInstances #-}
+{-# LANGUAGE  FlexibleInstances, TypeSynonymInstances #-}
 
 -- The Timber compiler <timber-lang.org>
 --
@@ -64,6 +64,10 @@ instance Pr Int where
 
 instance Pr (String, String) where
     pr (a, b) = text a <> text b
+
+-- used by llvm backend
+instance Pr String where
+    pr a = text a
 
 infixl 4 $$$
 a $$$ b       = a $$ text " " $$ b

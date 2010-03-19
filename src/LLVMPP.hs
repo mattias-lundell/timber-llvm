@@ -1,6 +1,6 @@
 {-# LANGUAGE FlexibleInstances #-}
 
-module LLVMPP (ppLLVMModule) where
+module LLVMPP (ppLLVMModule, Text.PrettyPrint.render) where
 
 import LLVM
 import LLVMKindle hiding (char)
@@ -20,20 +20,20 @@ showLLVMstring (c:cs)
                         | ord c < 16 = '0' : (showHex.ord) c ""
                         | otherwise  = (showHex.ord) c ""
 
-ppLLVMModule :: LLVMModule -> String
-ppLLVMModule (LLVMModule name td gs fds cs fs) = render file
+ppLLVMModule :: LLVMModule -> Doc
+ppLLVMModule (LLVMModule name td gs fds cs fs) = llvmDoc
     where 
-      file = vcat $
-             [text "; typedefinitions"] ++
-             map pp td ++ 
-             [newline <> text "; global variables"] ++
-             map ppGlobalValue gs ++ 
-             [newline <> text "; external functions"] ++
-             map pp fds ++ 
-             [newline <> text "; toplevel constant"] ++
-             map pp cs ++ 
-             [newline <> text "; local functions"] ++
-             map pp fs
+      llvmDoc = vcat $
+                [text "; typedefinitions"] ++
+                map pp td ++ 
+                [newline <> text "; global variables"] ++
+                map ppGlobalValue gs ++ 
+                [newline <> text "; external functions"] ++
+                map pp fds ++ 
+                [newline <> text "; toplevel constant"] ++
+                map pp cs ++ 
+                [newline <> text "; local functions"] ++
+                map pp fs
 
 ppParams :: [(String,LLVMType)] -> Doc
 ppParams ((name,typ):p:ps) = ppType typ <> text " %" <> text name <> comma <> space <> ppParams (p:ps)

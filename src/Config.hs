@@ -346,7 +346,7 @@ data Pass            = Parser
                      deriving (Show,Eq,Ord,Enum)
                         
 allPasses            :: [Pass]
-allPasses            = [Parser .. K2C]
+allPasses            = [Parser .. K2LLVM]
 
 
 rtsDir clo           = datadir clo ++ "/rts" ++ target clo

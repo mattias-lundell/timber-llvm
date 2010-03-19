@@ -1,43 +1,36 @@
-
-
-module Kindle2LLVM where
+module Kindle2LLVM (kindle2llvm) where
 
 import Kindle hiding (unit)
 import Common hiding (name, Array)
 import Name hiding (name)
 import qualified Core
 import qualified Core2Kindle
-import qualified Prepare4C as P
-import Control.Monad.State
+import qualified Prepare4C
 import LLVMPP
 import Prelude hiding (and,or,div,rem)
 import LLVMPrim
 import Env
-import qualified Data.Map as Map
 
-import Data.Int
-import Data.Char
+import Data.Char (ord)
 import LLVM
 import LLVMKindle
 import Depend (groupMap)
 
 -- dsi contains structdefs Map Name Kindle.Decl
 kindle2llvm e2 e3 m@(Module name _ _ _ _) = do
-  let mod = runCodeGen (show name) (codeGenModule e2 e3 m) 
-      source = ppLLVMModule mod
-  tr $ show m
---  tr $ source
-  return source
+  let mod = runCodeGen (show name) (k2llvmModule e2 e3 m) 
+  -- tr $ show m
+  return . render $ ppLLVMModule mod
 
-codeGenModule (Core.Module _ _ _ es' _ _ [bs']) dsi (Module moduleName importNames es decls binds) = do
+k2llvmModule (Core.Module _ _ _ es' _ _ [bs']) dsi (Module moduleName importNames es decls binds) = do
   -- add structs from imported files
   let te2 = Core.tsigsOf bs' ++ extsMap es'
   tei <- Core2Kindle.c2kTEnv dsi te2 
-  let env1 = P.addTEnv (primTEnv++tei++es) (P.addDecls (primDecls++dsi) P.env0)
-      env  = P.addTEnv (mapSnd typeOf binds) (P.addDecls decls env1)
-      ktypedEs = P.pDecls env dsi
+  let env1 = Prepare4C.addTEnv (primTEnv++tei++es) (Prepare4C.addDecls (primDecls++dsi) Prepare4C.env0)
+      env  = Prepare4C.addTEnv (mapSnd typeOf binds) (Prepare4C.addDecls decls env1)
+      ktypedEs = Prepare4C.pDecls env dsi
       -- add functions declarations from imported files
-      ktypedEf = mapSnd P.pType tei
+      ktypedEf = mapSnd Prepare4C.pType tei
   -- gen primitive functions
   genPrimitives
   -- struct declarations
@@ -49,7 +42,7 @@ codeGenModule (Core.Module _ _ _ es' _ _ [bs']) dsi (Module moduleName importNam
   k2llvmHarvestFunTypes binds
   k2llvmTopBinds binds
   -- create _init_ module function
-  initModule moduleName importNames binds  
+  k2llvmInitModule moduleName importNames binds  
   getModule
 
 -- | Add external functions and global variable bindings
@@ -164,7 +157,7 @@ k2llvmValBinds (_,binds) = mapM_ f binds >> mapM_ g binds
                 name = k2llvmName vname
             size <- getStructSize (dropPtrs typ)            
             var <- lookupVar name           
-            r1 <- codeGenNew var typ size
+            r1 <- k2llvmNew var typ size
             addVar name r1
           f (vname, Val vtyp (ECast _ (ENew ntyp [] binds))) = do
             let objtyp = k2llvmType vtyp
@@ -175,11 +168,11 @@ k2llvmValBinds (_,binds) = mapM_ f binds >> mapM_ g binds
             case var of
               Just reg -> do
                        size <- getStructSize castyp
-                       r1 <- codeGenNew (Just reg) (ptr castyp) size
+                       r1 <- k2llvmNew (Just reg) (ptr castyp) size
                        return ()
               Nothing -> do
                        size <- getStructSize castyp
-                       r1 <- codeGenNew Nothing (ptr castyp) size
+                       r1 <- k2llvmNew Nothing (ptr castyp) size
                        r2 <- bitcast (ptr objtyp) r1
                        addVar vname' r2
           f (vname, Val vtyp exp0) = do
@@ -254,7 +247,7 @@ k2llvmCmd (CBind False [(x,Val t (ENew n [] bs))] (CBind False [(y,Val tref (ENe
   let objtyp = (struct (k2llvmName n))
   refsize <- getStructSize refstruct
   objsize <- getStructSize objtyp
-  r1 <- codeGenNew Nothing refstruct (refsize+objsize)
+  r1 <- k2llvmNew Nothing refstruct (refsize+objsize)
   addVar (k2llvmName y) r1
   r2 <- load r1
   callvoid "INITREF" [r2]
@@ -302,7 +295,6 @@ k2llvmCmd (CSwitch e alts) =
          _ -> do
               e' <- k2llvmExp e
               k2llvmIntSwitch e' alts
-
 k2llvmCmd (CSeq cmd1 cmd2) = k2llvmCmd cmd1 >> k2llvmCmd cmd2
 k2llvmCmd CBreak = getBreakLabel >>= br
 k2llvmCmd (CRaise exp1) = do
@@ -338,8 +330,8 @@ k2llvmFloatSwitch e (ALit lit cmd : alts) = do
   label falseBlock
   dropBreakLabel
   k2llvmFloatSwitch e alts
-k2llvmFloatSwitch e [AWild cmd] = do k2llvmNestIfCmd cmd
-
+k2llvmFloatSwitch e [AWild cmd] = k2llvmNestIfCmd cmd
+                                  
 k2llvmStringSwitch e (ALit (LStr _ lit) cmd : alts) = do
   trueBlock  <- getNextLabel
   falseBlock <- getNextLabel
@@ -352,7 +344,7 @@ k2llvmStringSwitch e (ALit (LStr _ lit) cmd : alts) = do
   label falseBlock
   dropBreakLabel
   k2llvmStringSwitch e alts
-k2llvmStringSwitch _ [AWild cmd] = do k2llvmNestIfCmd cmd
+k2llvmStringSwitch _ [AWild cmd] = k2llvmNestIfCmd cmd
 
 k2llvmIntSwitch e (ALit lit cmd : alts) = do
   trueBlock  <- getNextLabel
@@ -370,30 +362,27 @@ k2llvmIntSwitch _ []        = return ()
 
 k2llvmNestIfCmd CBreak             = return ()
 k2llvmNestIfCmd CCont              = getContinueLabel >>= br  
-k2llvmNestIfCmd (CRet e)           = do
-  e' <- k2llvmExp e
-  ret e'
-k2llvmNestIfCmd c                  = do k2llvmCmd c
+k2llvmNestIfCmd (CRet e)           = k2llvmExp e >>= ret
+k2llvmNestIfCmd c                  = k2llvmCmd c
 
 k2llvmExp :: Exp -> CodeGen LLVMValue
 k2llvmExp (EVar (Prim Inherit _)) = return $ LLVMConstant timestruct NullConst
-k2llvmExp (EVar name) = do
-                             getVar (k2llvmName name) >>= load
+k2llvmExp (EVar name) = getVar (k2llvmName name) >>= load
 k2llvmExp EThis = internalError0 "k2llvmExp EThis"      
 k2llvmExp (ELit (LStr _ s)) = genStr s
 k2llvmExp (ELit lit) = return $ lit2const lit 
 -- select in a n-tuple with n > 4
-k2llvmExp (ESel (ECast (TCon n _) exp) name) 
-    | isBigTuple n = do
-        r1 <- k2llvmExp exp
-        -- only possible to handle select from 'a' to 'z'
-        -- i.e. only up to 26-tuples
-        let offset = ord (head (show name)) - 96
-        -- the "2" is used to direct into the elem
-        -- part of the struct
-        r2 <- getelementptr poly [intConst 2,intConst offset] r1
-        load r2
-        -- select on casted struct
+k2llvmExp (ESel (ECast (TCon n _) exp) name) | isBigTuple n = do
+  r1 <- k2llvmExp exp
+  -- only possible to handle select from 'a' to 'z'
+  -- i.e. only up to 26-tuples
+  let offset = ord (head (show name)) - 96
+  -- the "2" is used to direct into the elem part of the struct
+  r2 <- getelementptr poly [intConst 2,intConst offset] r1
+  load r2
+    where 
+      isBigTuple n = isTuple n && width n > 4
+-- select on casted struct
 k2llvmExp (ESel (ECast atype exp) name) = do
   -- perform cast from struct to struct
   let totype@(Tptr totype_noptr) = k2llvmType atype
@@ -427,11 +416,9 @@ k2llvmExp (EEnter exp fname atypes exps) = do
   r3 <- (getelementptr typ [intConst offset] r1 >>= load)
   exps' <- mapM k2llvmExp (exp:exps)                              
   callhigher r3 typ exps'
-  -- many forms of casts, must keep track of types
-  -- for example zext can only be applied to 
-  -- shorter to longer integer, must have some
-  -- logic that chooses the right cast
-  -- boolean "optimizations" casts
+-- many forms of casts, must keep track of types for example zext can only be 
+-- applied to shorter to longer integer, must have some logic that chooses the 
+-- right cast boolean "optimizations" casts
 k2llvmExp (ECast (TCon (Prim Bool _) _) (ECast _ (ELit (LInt _ 1)))) = return true
 k2llvmExp (ECast (TCon (Prim Bool _) _) (ECast _ (ELit (LInt _ 0)))) = return false
 k2llvmExp (ECast (TCon (Prim Bool _) _) (ELit (LInt _ 1))) = return true 
@@ -481,61 +468,46 @@ primFcmp cmp exps = do
   [op1,op2] <- mapM k2llvmExp exps
   fcmp cmp op1 op2
 
-bitSet exps = do
-  [op1,op2] <- mapM k2llvmExp exps
-  let (Tint n) = getTyp op1
-  r1 <- bitcast (Tvector n bool) op1
-  r2 <- insertelement r1 true op2
-  bitcast (Tint n) r2
-
-bitClr exps = do
-  [op1,op2] <- mapM k2llvmExp exps
-  let (Tint n) = getTyp op1
-  r1 <- bitcast (Tvector n bool) op1
-  r2 <- insertelement r1 false op2
-  bitcast (Tint n) r2
-
-bitTst exps = do
-  [op1,op2] <- mapM k2llvmExp exps
-  let (Tint n) = getTyp op1
-  r1 <- bitcast (Tvector n bool) op1
-  r2 <- extractelement r1 op2
-  and true r2
-
-bitNot exps = do
-  [op1] <- mapM k2llvmExp exps
-  let (Tint n) = getTyp op1
-  bitcast (Tvector n bool) op1 >>= xor (vectorConst (replicate n true)) >>= bitcast (Tint n)
+primBitShift f exps = do
+  [op1, op2] <- mapM k2llvmExp exps
+  let bittyp = getTyp op1
+  r1 <- zext int op1
+  r2 <- f r1 op2
+  trunc bittyp r2
 
 codeGenECall :: Name -> [Exp] -> CodeGen LLVMValue
 codeGenECall (Prim name _) exps 
     | name `elem` [AND8,AND16,AND32]             = primBin and exps
     | name `elem` [OR8,OR16,OR32]                = primBin or exps
     | name `elem` [EXOR8,EXOR16,EXOR32]          = primBin xor exps
-    | name `elem` [SHIFTL8,SHIFTL16,SHIFTL32]    = do
+    | name `elem` [SHIFTL8,SHIFTL16,SHIFTL32]    = primBitShift shl exps
+    | name `elem` [SHIFTR8,SHIFTR16,SHIFTR32]    = primBitShift lshr exps
+    | name `elem` [SHIFTRA8,SHIFTRA16,SHIFTRA32] = primBitShift ashr exps
+    | name `elem` [SET8,SET16,SET32]             = do
           [op1,op2] <- mapM k2llvmExp exps
-          let bittyp = getTyp op1
-          r1 <- zext int op1
-          r2 <- shl r1 op2
-          trunc bittyp r2
-    | name `elem` [SHIFTR8,SHIFTR16,SHIFTR32]    = do
+          let (Tint n) = getTyp op1
+          r1 <- bitcast (Tvector n bool) op1
+          r2 <- insertelement r1 true op2
+          bitcast (Tint n) r2
+    | name `elem` [CLR8,CLR16,CLR32]             = do
           [op1,op2] <- mapM k2llvmExp exps
-          let bittyp = getTyp op1
-          r1 <- zext int op1
-          r2 <- lshr r1 op2
-          trunc bittyp r2
-    | name `elem` [SHIFTRA8,SHIFTRA16,SHIFTRA32] = do
+          let (Tint n) = getTyp op1
+          r1 <- bitcast (Tvector n bool) op1
+          r2 <- insertelement r1 false op2
+          bitcast (Tint n) r2
+    | name `elem` [TST8,TST16,TST32]             = do
           [op1,op2] <- mapM k2llvmExp exps
-          let bittyp = getTyp op1
-          r1 <- zext int op1
-          r2 <- ashr r1 op2
-          trunc bittyp r2
-    | name `elem` [SET8,SET16,SET32]             = bitSet exps
-    | name `elem` [CLR8,CLR16,CLR32]             = bitClr exps
-    | name `elem` [TST8,TST16,TST32]             = bitTst exps
-    | name `elem` [NOT8,NOT16,NOT32]             = bitNot exps
+          let (Tint n) = getTyp op1
+          r1 <- bitcast (Tvector n bool) op1
+          r2 <- extractelement r1 op2
+          and true r2
+    | name `elem` [NOT8,NOT16,NOT32]             = do 
+          [op1] <- mapM k2llvmExp exps
+          let (Tint n) = getTyp op1
+          bitcast (Tvector n bool) op1 >>= xor (vectorConst (replicate n true)) >>= bitcast (Tint n)
     | otherwise = case name of
-                    IntPlus ->  primBin add exps
+                    -- Integer arithmetic
+                    IntPlus  -> primBin add exps
                     IntMinus -> primBin sub exps
                     IntTimes -> primBin mul exps
                     IntDiv   -> primBin div exps
@@ -543,12 +515,14 @@ codeGenECall (Prim name _) exps
                     IntNeg   -> do
                               [exp] <- mapM k2llvmExp exps
                               sub (intConst 0) exp
+                    -- Integer comparison
                     IntEQ -> primIcmp IcmpEQ exps
                     IntNE -> primIcmp IcmpNE exps                             
                     IntGT -> primIcmp IcmpSGT exps                             
                     IntGE -> primIcmp IcmpSGE exps                             
                     IntLT -> primIcmp IcmpSLT exps                    
                     IntLE -> primIcmp IcmpSLE exps                                      
+                    -- Float arithmetic
                     FloatPlus -> primBin fadd exps
                     FloatMinus -> primBin fsub exps
                     FloatTimes -> primBin fmul exps
@@ -556,15 +530,16 @@ codeGenECall (Prim name _) exps
                     FloatNeg  -> do
                               [exp] <- mapM k2llvmExp exps
                               fsub (floatConst 0) exp
+                    -- Float comparison
                     FloatEQ -> primFcmp FcmpUEQ exps
                     FloatNE -> primFcmp FcmpUNE exps                              
                     FloatGT -> primFcmp FcmpUGT exps                              
                     FloatGE -> primFcmp FcmpUGE exps                              
                     FloatLT -> primFcmp FcmpULT exps                              
-                    FloatLE -> primFcmp FcmpULE exps                              
-                    LOCK   -> mapM k2llvmExp exps >>= call "LOCK"
-                    UNLOCK -> mapM k2llvmExp exps >>= call "UNLOCK"
-                    ASYNC ->  mapM k2llvmExp exps >>= call "ASYNC"
+                    FloatLE -> primFcmp FcmpULE exps
+                    -- Float show
+                    ShowFloat  -> mapM k2llvmExp exps >>= call "primShowFloat"
+                    -- Typecasts
                     IntToFloat -> do
                               [exp] <- mapM k2llvmExp exps
                               sitofp float exp
@@ -579,6 +554,7 @@ codeGenECall (Prim name _) exps
                               [exp] <- mapM k2llvmExp exps
                               r1 <- ptrtoint int exp
                               bitcast float r1
+                    -- Short-cut AND
                     LazyAnd -> do                              
                               [op1,op2] <- mapM k2llvmExp exps                              
                               r1 <- alloca bool
@@ -596,6 +572,7 @@ codeGenECall (Prim name _) exps
                               br l3
                               label l3
                               load r1
+                    -- Short-cut OR
                     LazyOr -> do
                               [op1,op2] <- mapM k2llvmExp exps
                               r1 <- alloca bool
@@ -613,8 +590,10 @@ codeGenECall (Prim name _) exps
                               br l3
                               label l3
                               load r1
+                    -- Time arithmetic
                     TimeMinus  -> mapM k2llvmExp exps >>= call "primTimeMinus"
                     TimePlus   -> mapM k2llvmExp exps >>= call "primTimePlus"
+                    -- Time comparison
                     TimeEQ     -> mapM k2llvmExp exps >>= call "primTimeEQ"
                     TimeNE     -> mapM k2llvmExp exps >>= call "primTimeNE"
                     TimeGE     -> mapM k2llvmExp exps >>= call "primTimeGE"
@@ -622,56 +601,55 @@ codeGenECall (Prim name _) exps
                     TimeLT     -> mapM k2llvmExp exps >>= call "primTimeLT"
                     TimeLE     -> mapM k2llvmExp exps >>= call "primTimeLE"
                     TimeMin    -> mapM k2llvmExp exps >>= call "primTimeMin"
-                    Refl       -> mapM k2llvmExp exps >>= call "primRefl"
+                    -- Time constructors
                     Sec        -> mapM k2llvmExp exps >>= call "sec"
+                    Millisec   -> mapM k2llvmExp exps >>= call "millisec"
+                    MicrosecOf -> mapM k2llvmExp exps >>= call "microsecOf"
+                    SecOf      -> mapM k2llvmExp exps >>= call "secOf"
+                    Refl       -> mapM k2llvmExp exps >>= call "primRefl"
+                    -- Pid comparison
                     PidEQ      -> primIcmp IcmpEQ exps
                     PidNE      -> primIcmp IcmpNE exps
+                    -- Array functions
                     ListArray  -> mapM k2llvmExp exps >>= call "primListArray"
+                    UniArray   -> mapM k2llvmExp exps >>= call "primUniArray"
+                    CloneArray -> mapM k2llvmExp exps >>= call "CloneArray"
+                    EmptyArray -> mapM k2llvmExp exps >>= call "EmptyArray"
                     IndexArray -> do
                       [_,arr,i] <- mapM k2llvmExp exps
                       getelementptr poly [intConst 2,i] arr >>= load
-                    ShowFloat  -> mapM k2llvmExp exps >>= call "primShowFloat"
                     SizeArray  -> do
                       [_,arr] <- mapM k2llvmExp exps 
                       getstructelemptr "size" arr >>= load
+                    -- Message functions
+                    LOCK   -> mapM k2llvmExp exps >>= call "LOCK"
+                    UNLOCK -> mapM k2llvmExp exps >>= call "UNLOCK"
+                    ASYNC ->  mapM k2llvmExp exps >>= call "ASYNC"                    
+                    -- Various functions
                     Raise      -> mapM k2llvmExp exps >>= call "Raise"
-                    EmptyArray -> mapM k2llvmExp exps >>= call "EmptyArray"
-                    Millisec   -> mapM k2llvmExp exps >>= call "millisec"
-                    UniArray   -> mapM k2llvmExp exps >>= call "primUniArray"
-                    CloneArray -> mapM k2llvmExp exps >>= call "CloneArray"
-                    MicrosecOf -> mapM k2llvmExp exps >>= call "microsecOf"
-                    SecOf      -> mapM k2llvmExp exps >>= call "secOf"
                     Abort      -> mapM k2llvmExp exps >>= call "ABORT"
                     TIMERTERM  -> mapM k2llvmExp exps >>= call "primTIMERTERM"
                     _ -> fail $ show name ++ " " ++ show exps
-
 codeGenECall name exps = do
   exps' <- mapM k2llvmExp exps
   let fname = k2llvmName name
   call fname exps'
 
-codeGenClosCall :: LLVMValue -> [AType] -> [Exp] -> CodeGen LLVMValue
-codeGenClosCall funAddr typs exps = mapM k2llvmExp exps >>= callhigher funAddr poly
-
-codeGenCall :: String -> [Exp] -> CodeGen LLVMValue
-codeGenCall fname exps = mapM k2llvmExp exps >>= call fname
-
-codeGenNew :: Maybe LLVMValue -> LLVMType -> Int -> CodeGen LLVMValue
-codeGenNew (Just r1) typ size = do
+k2llvmNew :: Maybe LLVMValue -> LLVMType -> Int -> CodeGen LLVMValue
+k2llvmNew (Just r1) typ size = do
   r2 <- bitcast (ptr $ ptr int) r1
   let size' = intConst (LLVMKindle.words size)
   callvoid "new" [r2,size']
   return r1
-codeGenNew Nothing typ size = do
+k2llvmNew Nothing typ size = do
   r1 <- alloca typ
   r2 <- bitcast (ptr (ptr int)) r1
   let size' = intConst (LLVMKindle.words size)
   callvoid "new" [r2,size']
   return r1
 
-isBigTuple n = isTuple n && width n > 4
-
-initModule n ns bs = do
+-- | Generate "_init_"-function
+k2llvmInitModule n ns bs = do
   let fname = "_init_" ++ modToundSc (str n)
       var    = LLVMRegister bool "INITIALIZED" (TagGlobal [Internal,Global] Nothing)
       varptr = LLVMRegister (ptr bool) "INITIALIZED" (TagGlobal [Internal,Global] Nothing)
@@ -701,4 +679,3 @@ initStructs binds = mapM_ k2llvmValBinds' (groupMap binds)
       isInitVal (_,Val _ (ECall (Prim GCINFO _) _ _)) = False
       isInitVal (_,Val _ _) = True
       isInitVal _ = False
-

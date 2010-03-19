@@ -234,7 +234,7 @@ compileTimber clo ifs (sm,t_file) ti_file c_file h_file llvm_file
 pass clo m p a          = do -- tr ("Pass " ++ show p ++ " ...")
                              r <- m a
                              Monad.when (dumpAfter clo p) 
-                                $ tr ("#### Result after " ++ show p ++ ":\n\n") -- ++ render (pr r))
+                                $ tr ("#### Result after " ++ show p ++ ":\n\n" ++ render (pr r))
                              Monad.when (stopAfter clo p)
                                 $ fail ("#### Terminated after " ++ show p ++ ".")
                              return r                  
