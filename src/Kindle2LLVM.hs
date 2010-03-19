@@ -25,7 +25,7 @@ import Depend (groupMap)
 kindle2llvm e2 e3 m@(Module name _ _ _ _) = do
   let mod = runCodeGen (show name) (codeGenModule e2 e3 m) 
       source = ppLLVMModule mod
---  tr $ show m
+  tr $ show m
 --  tr $ source
   return source
 
@@ -239,52 +239,11 @@ atenv2params ps = return [(k2llvmName v, k2llvmType typ) | (v,typ) <- ps]
 lit2const (LInt _ n) = intConst n
 lit2const (LChr _ c) = charConst c
 lit2const (LRat _ r) = floatConst r
---lit2const (LStr _ s) = genStr s
 
-{-
-genStringSwitch _ _ end [] = br end
-genStringSwitch m typ end (ALit (LStr _ lit) cmd : alts) = do
-  l1 <- getNextLabel
-  l2 <- getNextLabel
-  str <- genStr lit
-  call "strEq" [m, str] >>= trunc bool >>= condbr l1 l2
-  label l1
-  k2llvmCmd cmd
-  br end
-  label l2
-  genStringSwitch m typ end alts
-genStringSwitch m typ end (AWild cmd : alts) = do
-  k2llvmCmd cmd
-  genStringSwitch m typ end alts
-
-genIntSwitch _ _ end [] = br end
-genIntSwitch m typ end (ALit lit cmd : alts) = do
-  l1 <- getNextLabel
-  l2 <- getNextLabel
-  icmp IcmpEQ m (lit2const lit) >>= condbr l1 l2
-  label l1
-  k2llvmCmd cmd
-  br end
-  label l2
-  genIntSwitch m typ end alts
-genIntSwitch m typ end (AWild cmd : alts) = do
-  k2llvmCmd cmd
-  genIntSwitch m typ end alts
-
-genFloatSwitch _ _ end [] = br end
-genFloatSwitch m typ end (ALit lit cmd : alts) = do
-  l1 <- getNextLabel
-  l2 <- getNextLabel
-  fcmp FcmpUEQ m (lit2const lit) >>= condbr l1 l2
-  label l1
-  k2llvmCmd cmd
-  br end
-  label l2
-  genFloatSwitch m typ end alts
-genFloatSwitch m typ end (AWild cmd : alts) = do
-  k2llvmCmd cmd
-  genFloatSwitch m typ end alts
--}
+genStr s = do 
+  addString s
+  r <- getString s
+  call "getStr" [r]
 
 k2llvmCmd :: Cmd -> CodeGen () 
 k2llvmCmd (CRet exp1) = k2llvmExp exp1 >>= ret
@@ -301,10 +260,8 @@ k2llvmCmd (CBind False [(x,Val t (ENew n [] bs))] (CBind False [(y,Val tref (ENe
   callvoid "INITREF" [r2]
   k2llvmStructBinds (ECast t (ESel (EVar y) (prim STATE))) n bs
   k2llvmCmd c
-k2llvmCmd (CBind False [(_,Val t e)] (CRet (ECast t' _)))
-    | t == tUNIT && t' == tUNIT = k2llvmExp e >> return ()
 k2llvmCmd (CBind False [(_,Val t e)] CBreak)
-  | t == tUNIT = getBreakLabel >>= br
+    | t == tUNIT = getBreakLabel >>= br
 k2llvmCmd (CBind False binds cmd1) = do
   k2llvmValBinds (False,binds)
   k2llvmCmd cmd1
@@ -369,11 +326,6 @@ k2llvmCmd (CWhile exp1 cmd1 cmd2) = do
   dropContinueLabel
   k2llvmCmd cmd2                             
 k2llvmCmd CCont = getContinueLabel >>= br
-
-genStr s = do 
-  addString s
-  r <- getString s
-  call "getStr" [r]
 
 k2llvmFloatSwitch e (ALit lit cmd : alts) = do
   trueBlock  <- getNextLabel

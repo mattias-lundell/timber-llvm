@@ -11,4 +11,3 @@ root w = do
       env.stdout.write str
 
    env.stdin.installR echo
-

@@ -75,6 +75,7 @@ compileLLVM global_cfg clo ll_file = do
                cfg <- fileCfg clo ll_file global_cfg
                let cmdLLVMAS = llvmLLVMAS cfg ++ " -f " ++ ll_file
                putStrLn ("[compiling " ++ ll_file ++ "]")
+               tr $ show cmdLLVMAS
                execCmd clo cmdLLVMAS
 --               let cmdLLC = llvmLLC cfg ++ bc_file ++ " -f -o " ++ s_file ++ " -march=x86"
 --               putStrLn ("[compiling " ++ bc_file ++ "]")
