@@ -1,0 +1,15 @@
+# compile rts.c
+clang -g -m32 -pthread -D_GNU_SOURCE=1 -Wall -fno-strict-aliasing -g -I../include -I../lib -I. -c rts.c -emit-llvm -o rts.bc
+
+# POSIX.extern.c to bc file
+clang -g -m32 -pthread -D_GNU_SOURCE=1 -Wall -fno-strict-aliasing -g -I../include -I../lib -I. -c ../lib/POSIX.extern.c -emit-llvm -o POSIX.extern.bc
+
+cd ../lib
+timberc --api --llvm *.t
+cd ../rtsPOSIX
+
+# copy library files
+cp ../lib/*.bc .
+
+# link
+llvm-link *.bc -o libTimber.bc

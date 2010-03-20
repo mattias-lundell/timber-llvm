@@ -184,10 +184,10 @@ linkBC global_cfg clo r bc_files = do
       cmd1 = llvmLD cfg
              ++ rtsDir clo ++ "/libTimber.bc "
              ++ unwords bc_files
-             ++ " -r -o " ++ bc_file
+             ++ " -r -internalize -o " ++ bc_file
       -- apply llvm optimizations
       cmd2 = llvmOPT cfg
-             ++ " -mem2reg -adce -strip-dead-prototypes -deadtypeelim -std-compile-opts -std-link-opts -time-passes "
+             ++ " -mem2reg -dce -strip-dead-prototypes -deadtypeelim -std-compile-opts -std-link-opts -time-passes "
              ++ llvmOptFlags clo ++ " "
              ++ bc_file
              ++ " -f -o " 
