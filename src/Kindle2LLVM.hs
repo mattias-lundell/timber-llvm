@@ -267,8 +267,6 @@ k2llvmCmd (CBind False [(x,Val t (ENew n [] bs))] (CBind False [(y,Val tref (ENe
   callvoid "INITREF" [r2]
   k2llvmStructBinds (ECast t (ESel (EVar y) (prim STATE))) n bs
   k2llvmCmd c
-k2llvmCmd (CBind False [(_,Val t e)] (CRet (ECast t' _)))
-    | t == tUNIT && t' == tUNIT = k2llvmExp e >> unreachable 
 k2llvmCmd (CBind False [(_,Val t e)] CBreak)
     | t == tUNIT = getBreakLabel >>= br
 k2llvmCmd (CBind False binds cmd1) = do
