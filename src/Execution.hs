@@ -75,49 +75,16 @@ compileLLVM global_cfg clo ll_file = do
                cfg <- fileCfg clo ll_file global_cfg
                let cmdLLVMAS = llvmLLVMAS cfg ++ " -f " ++ ll_file
                putStrLn ("[compiling " ++ ll_file ++ "]")
-               tr $ show cmdLLVMAS
                execCmd clo cmdLLVMAS
---               let cmdLLC = llvmLLC cfg ++ bc_file ++ " -f -o " ++ s_file ++ " -march=x86"
---               putStrLn ("[compiling " ++ bc_file ++ "]")
---               execCmd clo cmdLLC
---               let cmdAS = llvmAS cfg ++ s_file ++ " -o " ++ o_file
---               putStrLn ("[compiling " ++ s_file ++ "]")
---               execCmd clo cmdAS              
              else return ()
-  where checkUpToDate ll_file bc_file = do 
-          bc_exists <- Directory.doesFileExist bc_file
-          if bc_exists then do
-                        llvm_time <- Directory.getModificationTime ll_file
-                        bc_time   <- Directory.getModificationTime bc_file
-                        return (llvm_time <= bc_time)
-                      else return False
+  where checkUpToDate ll_file bc_file = return False --do 
+-- XXX change this, all files are recomiled each time to prevent name clashes when linking
+--          bc_exists <- Directory.doesFileExist bc_file
+--          if bc_exists then do llvm_time <- Directory.getModificationTime ll_file
+--                               bc_time   <- Directory.getModificationTime bc_file
+--                               return (llvm_time <= bc_time)
+--                       else return False
 
-{-
-compileLLVM global_cfg clo ll_file = do
-  let bc_file = rmSuffix ".ll" ll_file ++ ".bc"
-      s_file  = rmSuffix ".ll" (rmDirs ll_file) ++ ".s"
-      o_file  = rmSuffix ".ll" (rmDirs ll_file) ++ ".o"
-  res <- checkUpToDate ll_file o_file
-  if not res then do
-               cfg <- fileCfg clo ll_file global_cfg
-               let cmdLLVMAS = llvmLLVMAS cfg ++ " -f " ++ ll_file
-               putStrLn ("[compiling " ++ ll_file ++ "]")
-               execCmd clo cmdLLVMAS
-               let cmdLLC = llvmLLC cfg ++ bc_file ++ " -f -o " ++ s_file ++ " -march=x86"
-               putStrLn ("[compiling " ++ bc_file ++ "]")
-               execCmd clo cmdLLC
-               let cmdAS = llvmAS cfg ++ s_file ++ " -o " ++ o_file
-               putStrLn ("[compiling " ++ s_file ++ "]")
-               execCmd clo cmdAS              
-             else return ()
-  where checkUpToDate ll_file o_file = do 
-          o_exists <- Directory.doesFileExist o_file
-          if o_exists then do
-                        llvm_time  <- Directory.getModificationTime ll_file
-                        o_time     <- Directory.getModificationTime o_file
-                        return (llvm_time <= o_time)
-                      else return False
--}
 
 -- | Compile a C-file. 
 compileC global_cfg clo c_file = do 
@@ -143,34 +110,6 @@ compileC global_cfg clo c_file = do
                                                       o_time <- Directory.getModificationTime o_file
                                                       return (c_time <= o_time)
 
-{-
--- | Compile a C-file. 
-compileC global_cfg clo c_file
-                        = do let o_file = rmSuffix ".c" (rmDirs c_file) ++ ".o"
-                             res <- checkUpToDate c_file o_file
-                             if not res then do
-                                putStrLn ("[compiling "++c_file++"]")
-                                cfg <- fileCfg clo c_file global_cfg
-                                let cmd = cCompiler cfg
-                                        ++ " -c " ++ compileFlags cfg
-                                        ++ " -I " ++ libDir clo ++ " " 
-                                        ++ " -I " ++ includeDir clo ++ " " 
-                                        ++ " -I " ++ rtsDir clo ++ " " 
-                                        ++ " -I . "
-                                        ++ c_file
-                                --return ()
-                                execCmd clo cmd
-                              else return ()
-  where checkUpToDate c_file o_file
-                        = do o_exists <- Directory.doesFileExist o_file
-                             if not o_exists then
-                                return False
-                               else do
-                                 c_time  <- Directory.getModificationTime c_file
-                                 o_time  <- Directory.getModificationTime o_file
-                                 return (c_time <= o_time)
--}
-
 linkBC global_cfg clo r bc_files = do
   let bc_file = outfile clo ++ ".bc"
       o_file  = outfile clo ++ ".o"
@@ -187,7 +126,8 @@ linkBC global_cfg clo r bc_files = do
              ++ " -r -internalize -o " ++ bc_file
       -- apply llvm optimizations
       cmd2 = llvmOPT cfg
-             ++ " -mem2reg -dce -strip-dead-prototypes -deadtypeelim -std-compile-opts -std-link-opts -time-passes "
+             ++ " -mem2reg -dce -strip-dead-prototypes -deadtypeelim" 
+             ++ " -std-compile-opts -std-link-opts "
              ++ llvmOptFlags clo ++ " "
              ++ bc_file
              ++ " -f -o " 
@@ -211,11 +151,6 @@ linkBC global_cfg clo r bc_files = do
              ++ " -DROOT=" ++ rootId
              ++ " -DROOTINIT=" ++ initId ++ " "
              ++ rtsMain clo 
-  tr $ cmd1
-  tr $ cmd2
-  tr $ cmd3
-  tr $ cmd4
-  tr $ cmd5
   execCmd clo cmd1
   execCmd clo cmd2
   execCmd clo cmd3
@@ -243,36 +178,7 @@ linkO global_cfg clo r o_files =
                                        ++ " -DROOTINIT=" ++ initId ++ " "
                                        ++ rtsMain clo 
                                        ++ linkLibs cfg
-                             tr $ cmd
---                             return ()
                              execCmd clo cmd
-
-{-
--- | Link together a bunch of object files.
-linkO global_cfg clo r o_files =
-                          do putStrLn "[linking]"
-                             cfg <- foldr ((=<<) . fileCfg clo) (return global_cfg) o_files
-                             let rootId     = name2str r
-                                 Just rMod = fromMod r
-                                 initId     = "_init_" ++ modToundSc rMod
-                                 cmd = cCompiler cfg
-                                       ++ linkFlags cfg
-                                       ++ compileFlags cfg
-                                       ++ " -o " ++ outfile clo ++ " "
-                                       ++ unwords o_files ++ " "
-                                       ++ " -L" ++ rtsDir clo ++ " " 
-                                       ++ " -I" ++ includeDir clo ++ " " 
-                                       ++ " -I" ++ libDir clo ++ " " 
-                                       ++ " -I " ++ rtsDir clo ++ " " 
-                                       ++ " -I . "  
-                                       ++ " -DROOT=" ++ rootId ++ " "
-                                       ++ " -DROOTINIT=" ++ initId ++ " "
-                                       ++ rtsMain clo 
-                                       ++ linkLibs cfg
-                             tr $ cmd
---                             return ()
-                             execCmd clo cmd
--}
 
 -- | Return with exit code /= 0
 abortCompiler         = exitWith (ExitFailure 1)
