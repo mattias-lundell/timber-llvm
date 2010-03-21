@@ -344,8 +344,8 @@ k2llvmSwitch e (ALit lit cmd : alts) end = do
       where cmp (LStr _ lit) = do
               str <- genStr lit
               call "strEq" [e, str] >>= trunc bool
-            cmp lit@(LInt _ _) = icmp IcmpEQ e (lit2const lit)
             cmp lit@(LRat _ _) = fcmp FcmpUEQ e (lit2const lit)
+            cmp _              = icmp IcmpEQ e (lit2const lit)
 k2llvmSwitch _ [AWild c] end = k2llvmCmd c
 k2llvmSwitch _ []        end = br end
 
