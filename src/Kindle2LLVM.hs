@@ -267,6 +267,8 @@ k2llvmCmd (CBind False [(x,Val t (ENew n [] bs))] (CBind False [(y,Val tref (ENe
   callvoid "INITREF" [r2]
   k2llvmStructBinds (ECast t (ESel (EVar y) (prim STATE))) n bs
   k2llvmCmd c
+k2llvmCmd (CBind False [(_,Val t e)] (CRet (ECast t' _)))
+    | t == tUNIT && t' == tUNIT = k2llvmExp e >> unreachable 
 k2llvmCmd (CBind False [(_,Val t e)] CBreak)
     | t == tUNIT = getBreakLabel >>= br
 k2llvmCmd (CBind False binds cmd1) = do
@@ -296,19 +298,14 @@ k2llvmCmd (CUpdA array index newval cmd1) = do
   r4 <- getelementptr typ [intConst offset] r1
   getelementptr etyp [r2] r4 >>= store r3
   k2llvmCmd cmd1
-k2llvmCmd (CSwitch e alts) = 
-    let firstLit (ALit l _ : _) = l
-        firstLit (_ : as)       = firstLit as
-    in case litType (firstLit alts) of
-         TCon (Prim LIST _) [TCon (Prim Char _) []] -> do
-              e' <- k2llvmExp e
-              k2llvmStringSwitch e' alts
-         TCon (Prim Float _) [] -> do
-              e' <- k2llvmExp e
-              k2llvmFloatSwitch e' alts
-         _ -> do
-              e' <- k2llvmExp e
-              k2llvmIntSwitch e' alts
+k2llvmCmd (CSwitch e alts) = do
+  e' <- k2llvmExp e
+  switchEnd <- getNextLabel
+  addBreakLabel switchEnd
+  k2llvmSwitch e' alts switchEnd
+  br switchEnd
+  label switchEnd
+  dropBreakLabel
 k2llvmCmd (CSeq cmd1 cmd2) = k2llvmCmd cmd1 >> k2llvmCmd cmd2
 k2llvmCmd CBreak = getBreakLabel >>= br
 k2llvmCmd (CRaise exp1) = do
@@ -333,52 +330,24 @@ k2llvmCmd (CWhile exp1 cmd1 cmd2) = do
   k2llvmCmd cmd2                             
 k2llvmCmd CCont = getContinueLabel >>= br
 
--- XXX boilerplate switch code
-k2llvmFloatSwitch e (ALit lit cmd : alts) = do
-  trueBlock  <- getNextLabel
-  falseBlock <- getNextLabel
-  addBreakLabel falseBlock
-  fcmp FcmpUEQ e (lit2const lit) >>= condbr trueBlock falseBlock
-  label trueBlock
-  k2llvmNestIfCmd cmd
-  br falseBlock
-  label falseBlock
-  dropBreakLabel
-  k2llvmFloatSwitch e alts
-k2llvmFloatSwitch e [AWild cmd] = k2llvmNestIfCmd cmd
--- XXX boilerplate switch code    
-k2llvmStringSwitch e (ALit (LStr _ lit) cmd : alts) = do
-  trueBlock  <- getNextLabel
-  falseBlock <- getNextLabel
-  addBreakLabel falseBlock
-  str <- genStr lit
-  call "strEq" [e, str] >>= trunc bool >>= condbr trueBlock falseBlock
-  label trueBlock
-  k2llvmNestIfCmd cmd
-  br falseBlock
-  label falseBlock
-  dropBreakLabel
-  k2llvmStringSwitch e alts
-k2llvmStringSwitch _ [AWild cmd] = k2llvmNestIfCmd cmd
--- XXX boilerplate switch code
-k2llvmIntSwitch e (ALit lit cmd : alts) = do
-  trueBlock  <- getNextLabel
-  falseBlock <- getNextLabel
-  addBreakLabel falseBlock
-  icmp IcmpEQ e (lit2const lit) >>= condbr trueBlock falseBlock
-  label trueBlock
-  k2llvmNestIfCmd cmd
-  br falseBlock
-  label falseBlock
-  dropBreakLabel
-  k2llvmIntSwitch e alts
-k2llvmIntSwitch _ [AWild c] = k2llvmNestIfCmd c
-k2llvmIntSwitch _ []        = return ()
 
-k2llvmNestIfCmd CBreak             = return ()
-k2llvmNestIfCmd CCont              = getContinueLabel >>= br  
-k2llvmNestIfCmd (CRet e)           = k2llvmExp e >>= ret
-k2llvmNestIfCmd c                  = k2llvmCmd c
+-- | Generate code for switch command
+k2llvmSwitch e (ALit lit cmd : alts) end = do
+  trueBlock  <- getNextLabel
+  falseBlock <- getNextLabel
+  cmp lit >>= condbr trueBlock falseBlock
+  label trueBlock
+  k2llvmCmd cmd
+  br falseBlock
+  label falseBlock
+  k2llvmSwitch e alts end
+      where cmp (LStr _ lit) = do
+              str <- genStr lit
+              call "strEq" [e, str] >>= trunc bool
+            cmp lit@(LInt _ _) = icmp IcmpEQ e (lit2const lit)
+            cmp lit@(LRat _ _) = fcmp FcmpUEQ e (lit2const lit)
+k2llvmSwitch _ [AWild c] end = k2llvmCmd c
+k2llvmSwitch _ []        end = br end
 
 k2llvmExp :: Exp -> CodeGen LLVMValue
 k2llvmExp (EVar (Prim Inherit _)) = return $ LLVMConstant timestruct NullConst
@@ -405,7 +374,7 @@ k2llvmExp (ESel (ECast atype exp) name) = do
   -- get type and offset
   (offset,typ) <- getStructIndex totype_noptr (k2llvmName name)
   getelementptr typ [intConst offset] r2 >>= load
-  -- select on ordinary structs
+-- select on ordinary structs
 k2llvmExp (ESel exp1 name) = do
   r1 <- k2llvmExp exp1
   let typ@(Tptr typ_noptr) = getTyp r1
@@ -428,9 +397,7 @@ k2llvmExp (EEnter exp fname atypes exps) = do
   r3 <- load =<< getelementptr typ [intConst offset] r1
   exps' <- mapM k2llvmExp (exp:exps)                              
   callhigher r3 typ exps'
--- many forms of casts, must keep track of types for example zext can only be 
--- applied to shorter to longer integer, must have some logic that chooses the 
--- right cast boolean "optimizations" casts
+-- boolean "optimizations" casts
 k2llvmExp (ECast (TCon (Prim Bool _) _) (ECast _ (ELit (LInt _ 1)))) = return true
 k2llvmExp (ECast (TCon (Prim Bool _) _) (ECast _ (ELit (LInt _ 0)))) = return false
 k2llvmExp (ECast (TCon (Prim Bool _) _) (ELit (LInt _ 1))) = return true 
