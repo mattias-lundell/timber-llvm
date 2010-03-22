@@ -310,24 +310,26 @@ k2llvmCmd (CRaise exp1) = do
   exp <- k2llvmExp exp1
   callvoid "RAISE" [exp]                             
 k2llvmCmd (CWhile exp1 cmd1 cmd2) = do
-  loopHead <- getNextLabel
+  loopCond <- getNextLabel
   loopBody <- getNextLabel
-  loopExit <- getNextLabel
-  addContinueLabel loopHead
-  addBreakLabel loopExit
-  br loopHead
-  label loopHead
-  exp <- k2llvmExp exp1
-  icmp IcmpEQ exp true >>= condbr loopBody loopExit
+  loopEnd  <- getNextLabel
+  addContinueLabel loopCond
+  addBreakLabel loopEnd
+  br loopCond
+  -- loop body
   label loopBody
   k2llvmCmd cmd1
-  br loopHead
-  label loopExit
+  br loopCond
+  -- loop condition
+  label loopCond
+  exp <- k2llvmExp exp1
+  icmp IcmpEQ exp true >>= condbr loopBody loopEnd
+  -- loop end
+  label loopEnd
   dropBreakLabel
   dropContinueLabel
   k2llvmCmd cmd2                             
 k2llvmCmd CCont = getContinueLabel >>= br
-
 
 -- | Generate code for switch command
 k2llvmSwitch e (ALit lit cmd : alts) end = do
@@ -532,40 +534,44 @@ codeGenECall (Prim name _) exps
                               r1 <- ptrtoint int exp
                               bitcast float r1
                     -- Short-cut AND
-                    LazyAnd -> do                              
-                              [op1,op2] <- mapM k2llvmExp exps                              
+                    LazyAnd -> do
+                              let [e1,e2] = exps
                               r1 <- alloca bool
-                              l1 <- getNextLabel
-                              l2 <- getNextLabel
-                              l3 <- getNextLabel
+                              firstTrue  <- getNextLabel
+                              firstFalse <- getNextLabel
+                              end <- getNextLabel
+                              op1 <- k2llvmExp e1
                               icmp IcmpEQ op1 true >>=
-                                   condbr l1 l2                             
-                              label l1
+                                   condbr firstTrue firstFalse
+                              label firstTrue
+                              op2 <- k2llvmExp e2 
                               r2 <- icmp IcmpEQ op2 true 
                               store r2 r1
-                              br l3
-                              label l2
+                              br end
+                              label firstFalse
                               store false r1
-                              br l3
-                              label l3
+                              br end
+                              label end
                               load r1
                     -- Short-cut OR
                     LazyOr -> do
-                              [op1,op2] <- mapM k2llvmExp exps
+                              let [e1,e2] = exps
                               r1 <- alloca bool
-                              l1 <- getNextLabel
-                              l2 <- getNextLabel
-                              l3 <- getNextLabel
+                              firstTrue <- getNextLabel
+                              firstFalse <- getNextLabel
+                              end <- getNextLabel
+                              op1 <- k2llvmExp e1
                               icmp IcmpEQ op1 true >>=
-                                   condbr l1 l2
-                              label l1
+                                   condbr firstTrue firstFalse
+                              label firstTrue
                               store true r1
-                              br l3
-                              label l2
+                              br end
+                              label firstFalse
+                              op2 <- k2llvmExp e2
                               r2 <- icmp IcmpEQ op2 true 
                               store r2 r1
-                              br l3
-                              label l3
+                              br end
+                              label end
                               load r1
                     -- Time arithmetic
                     TimeMinus  -> mapM k2llvmExp exps >>= call "primTimeMinus"
