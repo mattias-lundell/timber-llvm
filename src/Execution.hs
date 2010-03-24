@@ -58,14 +58,6 @@ import Common
 import Config
 import Name
 
-compile cfg clo file
-    | doLLVM clo = compileLLVM cfg clo (file ++ ".ll")
-    | otherwise  = fail $ show file -- compileC cfg clo (file ++ ".c")
-
-link cfg clo files
-    | doLLVM clo = linkBC cfg clo files
-    | otherwise  = fail $ show files -- linkO cfg clo files
-
 compileLLVM global_cfg clo ll_file = do
   let bc_file = rmSuffix ".ll" ll_file ++ ".bc"
       s_file  = rmSuffix ".ll" (rmDirs ll_file) ++ ".s"
@@ -111,51 +103,47 @@ compileC global_cfg clo c_file = do
                                                       return (c_time <= o_time)
 
 linkBC global_cfg clo r bc_files = do
-  let bc_file = outfile clo ++ ".bc"
-      o_file  = outfile clo ++ ".o"
-      s_file  = outfile clo ++ ".s"
+  let bc_file    = outfile clo ++ ".bc"
+      o_file     = outfile clo ++ ".o"
+      s_file     = outfile clo ++ ".s"
+      tmp_bcfile = outfile clo ++ "tmp.bc"
   putStrLn "[linking]"
   cfg <- foldr ((=<<) . fileCfg clo) (return global_cfg) bc_files
   let rootId     = name2str r
       Just rMod = fromMod r
       initId     = "_init_" ++ modToundSc rMod 
       -- link bc_files with libTimber.bc
-      cmd1 = llvmLD cfg
-             ++ rtsDir clo ++ "/libTimber.bc "
+      cmd1 = llvmLINK cfg ++ " "
              ++ unwords bc_files
-             ++ " -r -internalize -o " ++ bc_file
+             ++ " -o "
+             ++ tmp_bcfile
       -- apply llvm optimizations
       cmd2 = llvmOPT cfg
-             ++ " -mem2reg -dce -strip-dead-prototypes -deadtypeelim" 
-             ++ " -std-compile-opts -std-link-opts "
+             ++ " -adce -mem2reg -std-link-opts -std-compile-opts "
              ++ llvmOptFlags clo ++ " "
-             ++ bc_file
+             ++ tmp_bcfile
              ++ " -f -o " 
-             ++ bc_file
+             ++ tmp_bcfile
       -- compile to native code
       cmd3 = llvmLLC cfg 
-             ++ bc_file ++ 
-             " -f -o " 
+             ++ tmp_bcfile ++ 
+             " -O3 -filetype=asm -o " 
              ++ s_file 
-             ++ " -march=x86"
-      -- assemble native code
-      cmd4 = llvmAS cfg 
-             ++ s_file 
-             ++ " -o " 
-             ++ o_file
-      -- compile main and link
-      cmd5 = cCompiler cfg
-             ++ " -pthread"
+      -- link 
+      cmd4 = llvmCLANG cfg
+             ++ " -Wno-implicit-function-declaration"
+             ++ " -L" ++ rtsDir clo
+             ++ " -O3 -m32 -DPOSIX -pthread"
              ++ " -o " ++ outfile clo ++ " "
-             ++ o_file
+             ++ s_file
              ++ " -DROOT=" ++ rootId
              ++ " -DROOTINIT=" ++ initId ++ " "
              ++ rtsMain clo 
+             ++ linkLibs cfg             
   execCmd clo cmd1
   execCmd clo cmd2
   execCmd clo cmd3
   execCmd clo cmd4
-  execCmd clo cmd5
 
 -- | Link together a bunch of object files.
 linkO global_cfg clo r o_files =
@@ -178,6 +166,7 @@ linkO global_cfg clo r o_files =
                                        ++ " -DROOTINIT=" ++ initId ++ " "
                                        ++ rtsMain clo 
                                        ++ linkLibs cfg
+                             tr $ cmd
                              execCmd clo cmd
 
 -- | Return with exit code /= 0

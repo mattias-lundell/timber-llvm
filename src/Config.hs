@@ -84,10 +84,12 @@ versionString = "The Timber compiler, version 1.0.3"
 -- | Contains the configuration for the compiler with the current
 -- command line switches.
 data CfgOpts         = CfgOpts { cCompiler       :: FilePath,
+                                 llvmCLANG       :: FilePath,
                                  llvmLLVMAS      :: FilePath,
                                  llvmLLC         :: FilePath,
                                  llvmAS          :: FilePath,
                                  llvmLD          :: FilePath,
+                                 llvmLINK        :: FilePath,
                                  llvmOPT         :: FilePath,
                                  compileFlags    :: String,
                                  linkFlags       :: String,
