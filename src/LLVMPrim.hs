@@ -3,49 +3,47 @@ module LLVMPrim where
 import LLVMKindle
 
 genPrimitives = do
-  -- primitive struct definitions found in rts, (name [(fieldname,fieldtype)])
+  -- primitive struct definitions found in rts (name [(fieldname,fieldtype)])
   addStruct "LIST"  [("GCINFO",poly)]
-  addStruct "CONS"  [("GCINFO",poly), 
-                     ("a", poly), 
+  addStruct "CONS"  [("GCINFO",poly),
+                     ("a", poly),
                      ("b", liststruct)]
-  addStruct "TUP2"  [("GCINFO",poly), 
-                     ("a", poly), 
-                     ("b", poly)] 
-  addStruct "TUP3"  [("GCINFO",poly), 
-                     ("a", poly), 
-                     ("b", poly), 
-                     ("c", poly)] 
-  addStruct "TUP4"  [("GCINFO",poly), 
-                     ("a", poly), 
-                     ("b", poly), 
-                     ("c", poly), 
+  addStruct "TUP2"  [("GCINFO",poly),
+                     ("a", poly),
+                     ("b", poly)]
+  addStruct "TUP3"  [("GCINFO",poly),
+                     ("a", poly),
+                     ("b", poly),
+                     ("c", poly)]
+  addStruct "TUP4"  [("GCINFO",poly),
+                     ("a", poly),
+                     ("b", poly),
+                     ("c", poly),
                      ("d", poly)]
-  addStruct "TUPLE" [("GCINFO",poly), 
-                     ("size", int), 
+  addStruct "TUPLE" [("GCINFO",poly),
+                     ("size", int),
                      ("elems",array 0 poly)]
-  addStruct "CLOS1" [("GCINFO",poly), 
-                     ("Code", ptr (fun poly [clos1struct, 
+  addStruct "CLOS1" [("GCINFO",poly),
+                     ("Code", ptr (fun poly [clos1struct,
                                              poly]))]
-  addStruct "CLOS2" [("GCINFO",poly), 
-                     ("Code", ptr (fun poly [clos2struct, 
-                                             poly, 
+  addStruct "CLOS2" [("GCINFO",poly),
+                     ("Code", ptr (fun poly [clos2struct,
+                                             poly,
                                              poly]))]
-  addStruct "CLOS3" [("GCINFO",poly), 
-                     ("Code", ptr (fun poly [clos3struct, 
-                                             poly, 
-                                             poly, 
+  addStruct "CLOS3" [("GCINFO",poly),
+                     ("Code", ptr (fun poly [clos3struct,
+                                             poly,
+                                             poly,
                                              poly]))]
   addStruct "CLOS"  [("GCINFO",poly),
                      ("Code", ptr (fun void []))]
-  
-  addStruct "PTHREAD_DESCR_STRUCT" [("a",opaque)]
-  addStruct "PTHREAD_FASTLOCK" [("a",int),
-                                ("b",int)]
-  addStruct "PTHREAD_MUTEX_T" [("a",int),
-                               ("b",int),
-                               ("c",ptr (struct "PTHREAD_DESCR_STRUCT")),
-                               ("d",int),
-                               ("e",struct "PTHREAD_FASTLOCK")]
+
+  -- the size of the struct depends on "__WORDSIZE"
+  -- 32 bit __WORDSIZE
+  addStruct "PTHREAD_MUTEX_T" [("a", array 24 bit8)]
+  -- 64 bit __WORDSIZE
+  --addStruct "PTHREAD_MUTEX_T" [("a", array 40 bit8)]
+
   addStruct "Ref"   [("GCINFO",   poly),
                      ("mut",      struct "PTHREAD_MUTEX_T"),
                      ("STATE",    poly)]
@@ -67,7 +65,7 @@ genPrimitives = do
   addStruct "RIGHT"  [("GCINFO", poly),
                       ("Tag", int),
                       ("a", poly)]
-  addStruct "WORLD" [("", opaque)] 
+  addStruct "WORLD" [("", opaque)]
   addStruct "Array" [("GCINFO", poly),
                      ("size", int),
                      ("elems", array 0 poly)]

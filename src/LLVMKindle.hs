@@ -4,16 +4,16 @@ module LLVMKindle where
 
 import LLVM
 
-import Common 
+import Common
 import Kindle hiding (unit)
 import Name hiding (name)
 import Control.Monad.State
-import qualified Data.Map as Map 
+import qualified Data.Map as Map
 import Data.List hiding (lookup, words)
 import Prelude hiding (lookup, words)
 import qualified Data.DList as DL
 
-type CodeGen a = StateT CGF (State CGM) a 
+type CodeGen a = StateT CGF (State CGM) a
 
 runCodeGen name = startCgm (cgm0 name) . startCgf (cgf0 "" Map.empty)
 
@@ -22,7 +22,7 @@ startCgf = flip evalStateT
 startCgm :: state -> State state a -> a
 startCgm = flip evalState
 
-cgmGets   = lift . gets 
+cgmGets   = lift . gets
 cgmModify = lift . modify
 
 cgfGets   = gets
@@ -40,7 +40,7 @@ data CGM = CGM {
       cgmConstants  :: Map.Map String LLVMTopLevelConstant,
       -- type of all functions
       cgmFunEnv     :: Map.Map String LLVMType,
-      -- external functions                       
+      -- external functions
       cgmEFunctions :: DL.DList LLVMFunctionDecl,
       -- functions already processed
       cgmLFunctions :: DL.DList LLVMFunction,
@@ -323,6 +323,9 @@ typeSize :: LLVMType -> CodeGen Int
 typeSize (Tint n) = return (n `Prelude.div` 8)
 typeSize (Tptr _) = return 4
 typeSize Tfloat = return 4
+typeSize (Tarray n typ) = do
+  typsize <- typeSize typ
+  return $ n*typsize
 typeSize styp@(Tstruct sname) = getStructSize styp
 typeSize _       = return 4
 
