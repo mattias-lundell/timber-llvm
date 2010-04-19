@@ -18,14 +18,14 @@ import Depend (groupMap)
 
 -- dsi contains structdefs Map Name Kindle.Decl
 kindle2llvm e2 e3 m@(Module name _ _ _ _) = do
-  let mod = runCodeGen (show name) (k2llvmModule e2 e3 m) 
+  let mod = runCodeGen (show name) (k2llvmModule e2 e3 m)
   -- tr $ show m
   return . render $ ppLLVMModule mod
 
 k2llvmModule (Core.Module _ _ _ es' _ _ [bs']) dsi (Module moduleName importNames es decls binds) = do
   -- add structs from imported files
   let te2 = Core.tsigsOf bs' ++ extsMap es'
-  tei <- Core2Kindle.c2kTEnv dsi te2 
+  tei <- Core2Kindle.c2kTEnv dsi te2
   let env1 = Prepare4C.addTEnv (primTEnv++tei++es) (Prepare4C.addDecls (primDecls++dsi) Prepare4C.env0)
       env  = Prepare4C.addTEnv (mapSnd typeOf binds) (Prepare4C.addDecls decls env1)
       ktypedEs = Prepare4C.pDecls env dsi
@@ -35,19 +35,19 @@ k2llvmModule (Core.Module _ _ _ es' _ _ [bs']) dsi (Module moduleName importName
   genPrimitives
   -- struct declarations
   k2llvmStructDecls (decls ++ ktypedEs)
-  mapM_ (\(sname,_) -> 
-             addExternalGC (k2llvmName sname) (array 0 int)) ktypedEs 
+  mapM_ (\(sname,_) ->
+             addExternalGC (k2llvmName sname) (array 0 int)) ktypedEs
   k2llvmAddExternals (ktypedEf ++ es)
   k2llvmAddGlobalVars binds
   k2llvmHarvestFunTypes binds
   k2llvmTopBinds binds
   -- create _init_ module function
-  k2llvmInitModule moduleName importNames binds  
+  k2llvmInitModule moduleName importNames binds
   getModule
 
 -- | Add external functions and global variable bindings
 k2llvmAddExternals binds = mapM_ f binds
-    where 
+    where
       f (fname, FunT _ intyps outtyp) = do
         let outtyp' = k2llvmType outtyp
             intyps' = map k2llvmType intyps
@@ -55,30 +55,30 @@ k2llvmAddExternals binds = mapM_ f binds
         addFunType fname' (ptr (fun outtyp' intyps'))
         addExternalFun fname' outtyp' intyps'
       f (vname, ValT vtyp) = do
-        let vname' = k2llvmName vname 
+        let vname' = k2llvmName vname
             vtyp'  = k2llvmType vtyp
-            reg    = LLVMRegister (ptr vtyp') vname' 
+            reg    = LLVMRegister (ptr vtyp') vname'
                      (TagGlobal [External,Global] Nothing)
         addGlobalVar vname' reg
 
 -- | Generate type aliases for all struct declarations
 k2llvmStructDecls sdecls = mapM_ f sdecls
-    where 
-      f (sname, Struct _ vars _) = do 
+    where
+      f (sname, Struct _ vars _) = do
         let sname' = k2llvmName sname
             vars' = map (fixvars sname') vars
         addStruct sname' vars'
       fixvars sname (name, ValT typ) = (k2llvmName name, k2llvmType typ)
-      fixvars sname (name, FunT _ argtyps restyp) = 
-          (k2llvmName name, ptr (fun (k2llvmType restyp) 
+      fixvars sname (name, FunT _ argtyps restyp) =
+          (k2llvmName name, ptr (fun (k2llvmType restyp)
                                 (ptr (struct sname) : map k2llvmType argtyps)))
 
--- | Harvest all functions types from the current file, llvm needs type 
+-- | Harvest all functions types from the current file, llvm needs type
 --   information when generating function calls
 k2llvmHarvestFunTypes binds = mapM_ f binds
-    where f (fname, Fun _ atype atenv _) = 
-              addFunType (k2llvmName fname) 
-                         (ptr (fun (k2llvmType atype) 
+    where f (fname, Fun _ atype atenv _) =
+              addFunType (k2llvmName fname)
+                         (ptr (fun (k2llvmType atype)
                                    (map k2llvmType (snd (unzip atenv)))))
           f _ = return ()
 
@@ -105,10 +105,10 @@ k2llvmStructBinds var ntype bind = mapM_ f bind
         (offset,typ) <- getStructIndex typ_noptr name
         ftyp <- getFunType (k2llvmName fname)
         let freg = LLVMRegister ftyp (k2llvmName fname) (TagGlobal [] Nothing)
-        r1 <- getelementptr typ [intConst offset] r0 
-        if k2llvmName ntype == "CLOS" 
+        r1 <- getelementptr typ [intConst offset] r0
+        if k2llvmName ntype == "CLOS"
             then do
-              freg' <- bitcast (ptr (fun void [])) freg 
+              freg' <- bitcast (ptr (fun void [])) freg
               store freg' r1
             else store freg r1
       f (x,_) = internalError0 ("k2llvmStructBinds " ++ show x)
@@ -120,14 +120,14 @@ k2llvmAddGlobalVars binds = mapM_ f binds
       f (vname, Val atype exp) = do
         let name = k2llvmName vname
             typ = k2llvmType atype
-        if isPtr typ 
+        if isPtr typ
           then
-              addGlobalVar name (LLVMRegister (ptr typ) name 
-                                 (TagGlobal [Common,Global] 
+              addGlobalVar name (LLVMRegister (ptr typ) name
+                                 (TagGlobal [Common,Global]
                                   (Just Null)))
           else
-              addGlobalVar name (LLVMRegister (ptr typ) name 
-                                 (TagGlobal [Common,Global] 
+              addGlobalVar name (LLVMRegister (ptr typ) name
+                                 (TagGlobal [Common,Global]
                                   (Just Zeroinitializer)))
       f _ = return ()
 
@@ -147,7 +147,7 @@ k2llvmTopBinds binds = mapM_ f binds
             -- Add unreachable (if function ends with a function call)
             unreachable
             addCurrFunction (k2llvmType funtyp) params
-          -- Create GCINFO array 
+          -- Create GCINFO array
           f b@(vname, Val _ (ECall (Prim GCINFO _) [] vs@(EVar v : _))) = do
             vals <- mapM (gcArray v) vs
             addLocalGC (array (length vals) int) (k2llvmName vname) vals
@@ -158,7 +158,7 @@ atenv2params ps = return [(k2llvmName v, k2llvmType typ) | (v,typ) <- ps]
 
 -- | Add function parameters, all parameters are allocated in the toplevel
 --   basic block, this way llvm handles conversation from memory to register.
---   when using -mem2reg optimization pass. 
+--   when using -mem2reg optimization pass.
 addParams (var,typ) = do
   reg <- getNewNamedReg var typ
   case typ of
@@ -172,7 +172,7 @@ addParams (var,typ) = do
                addVar var r1
 
 -- | Generate llvm representation of a GC array
-gcArray v (EVar x) 
+gcArray v (EVar x)
     | x == v = do
          size <- getStructSize (struct (k2llvmName v))
          return $ intConst (LLVMKindle.words size)
@@ -186,8 +186,8 @@ k2llvmValBinds (_,binds) = mapM_ f binds >> mapM_ g binds
     where f (vname, Val vtyp (ENew ntyp [] binds)) = do
             let typ = k2llvmType vtyp
                 name = k2llvmName vname
-            size <- getStructSize (dropPtrs typ)            
-            var <- lookupVar name           
+            size <- getStructSize (dropPtrs typ)
+            var <- lookupVar name
             r1 <- k2llvmNew var typ size
             addVar name r1
           f (vname, Val vtyp (ECast _ (ENew ntyp [] binds))) = do
@@ -218,9 +218,9 @@ k2llvmValBinds (_,binds) = mapM_ f binds >> mapM_ g binds
                        store r1 r2
                        addVar name r2
           f _ = return ()
-          g (vname, Val vtyp (ENew ntyp [] binds)) = 
+          g (vname, Val vtyp (ENew ntyp [] binds)) =
               k2llvmStructBinds (EVar vname) ntyp binds
-          g (vname, Val vtyp (ECast _ (ENew ntyp [] binds))) = 
+          g (vname, Val vtyp (ECast _ (ENew ntyp [] binds))) =
               k2llvmStructBinds (ECast (tCon ntyp) (EVar vname)) ntyp binds
           g _ = return ()
 
@@ -238,10 +238,9 @@ bindGCINFO r0 typ exp = do
                   LLVMRegister typ name tag <- getVar ("__GC__" ++ sname)
                   let r1 = LLVMRegister (ptr (dropPtrs typ)) name tag
                   r2 <- k2llvmExp (head exp)
-                  r3 <- ptrtoint int =<< getelementptr int [intConst 0] r1
-                  r4 <- inttoptr poly =<< add r3 r2
+                  r3 <- getelementptr int [r2] r1
                   r5 <- getstructelemptr "GCINFO" r0
-                  store r4 r5
+                  store r3 r5
 
 lit2const (LInt _ n) = intConst n
 lit2const (LChr _ c) = charConst c

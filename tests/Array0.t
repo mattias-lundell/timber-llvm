@@ -2,7 +2,7 @@ module Array0 where
 
 import POSIX
 
-a :: Array Int 
+a :: Array Int
 a = array [1..10000]
 
 foldlArray f u a = iter 0 u
@@ -14,4 +14,4 @@ root :: RootType
 root world = do
     env = new posix world
     env.stdout.write (show (foldlArray (+) 0 a) ++ "\n")
-    env.exit 0
+    env.exit
