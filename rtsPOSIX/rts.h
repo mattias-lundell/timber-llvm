@@ -220,5 +220,5 @@ Thread newThread(Msg m, int prio, void *(*fun)(void *), int stacksize) ;
 
 // new does the same thing as the macro NEW but as a callable function
 inline void new(ADDR* addr, size_t bytes);
-//void new(ADDR* addr, size_t bytes) __attribute__((always_inline));
+//void __attribute__((always_inline)) new(ADDR* addr, size_t bytes) ;
 #endif

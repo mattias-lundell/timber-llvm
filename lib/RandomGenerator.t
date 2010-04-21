@@ -2,23 +2,23 @@
 --
 -- Copyright 2008-2009 Johan Nordlander <nordland@csee.ltu.se>
 -- All rights reserved.
--- 
+--
 -- Redistribution and use in source and binary forms, with or without
 -- modification, are permitted provided that the following conditions
 -- are met:
--- 
+--
 -- 1. Redistributions of source code must retain the above copyright
 --    notice, this list of conditions and the following disclaimer.
--- 
+--
 -- 2. Redistributions in binary form must reproduce the above copyright
 --    notice, this list of conditions and the following disclaimer in the
 --    documentation and/or other materials provided with the distribution.
--- 
+--
 -- 3. Neither the names of the copyright holder and any identified
---    contributors, nor the names of their affiliations, may be used to 
---    endorse or promote products derived from this software without 
+--    contributors, nor the names of their affiliations, may be used to
+--    endorse or promote products derived from this software without
 --    specific prior written permission.
--- 
+--
 -- THIS SOFTWARE IS PROVIDED BY THE CONTRIBUTORS ``AS IS'' AND ANY EXPRESS
 -- OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
 -- WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -35,7 +35,7 @@ module RandomGenerator where
 
 struct Generator a where
   next :: Request a
-  
+
 -- Lehmer/Schrage random number generator. Simple and not too bad.
 -- baseGen generates integers in the range [1..m-1] on 32 bit machines.
 -- The n-th number produced is (seed * a^n) mod m but with calculations organised to avoid overflow.
@@ -50,11 +50,10 @@ baseGen seed = class
   r = 2836         -- = m `mod` a
 
   state := seed
-  
+
   next = request
     tmp = a * (state `mod` q) - r * (state `div` q)
     state := if tmp > 0 then tmp else tmp + m
     result state
 
   result Generator{..}
-

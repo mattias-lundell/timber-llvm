@@ -105,15 +105,15 @@ getModule = do
   fds  <- cgmGets cgmEFunctions
   cs   <- cgmGets cgmConstants
   fs   <- cgmGets cgmLFunctions
-  return $ LLVMModule name (Map.elems td) (filterLocalGC gs cs) 
+  return $ LLVMModule name (Map.elems td) (filterLocalGC gs cs)
             (DL.toList fds) (Map.elems cs) (DL.toList fs)
          where
            -- remove local gcinfo from globals
-           filterLocalGC gs cs = 
-               Map.elems (Map.filterWithKey 
+           filterLocalGC gs cs =
+               Map.elems (Map.filterWithKey
                           (\x _ -> x `notElem` localGC cs) gs)
            -- get keys of all local gcinfo
-           localGC cs = Map.keys . Map.filterWithKey 
+           localGC cs = Map.keys . Map.filterWithKey
                         (\x _ -> "__GC__" `isPrefixOf` x) $ cs
 
 getFunType :: String -> CodeGen LLVMType
@@ -124,12 +124,12 @@ addFunType name typ = cgmModify (\s -> s { cgmFunEnv = Map.insert name typ (cgmF
 
 getString :: String -> CodeGen LLVMValue
 getString s = do
-  cs <- cgmGets cgmConstants 
+  cs <- cgmGets cgmConstants
   (LLVMTopLevelConstant reg _ _) <- lookup s cs
   getarrayelemptr [intConst 0] reg
 
 getLocalGC :: String -> CodeGen LLVMValue
-getLocalGC styp = do 
+getLocalGC styp = do
     cs <- cgmGets cgmConstants
     (LLVMTopLevelConstant reg _ _) <- lookup styp cs
     return reg
@@ -142,7 +142,7 @@ addCurrFunction rettyp paramtypes = do
   cgmModify (\s -> s { cgmLFunctions = DL.snoc (cgmLFunctions s) fun })
 
 addGlobalVar :: String -> LLVMValue -> CodeGen ()
-addGlobalVar name reg  = 
+addGlobalVar name reg =
     cgmModify (\s -> s { cgmGlobals = Map.insert name reg (cgmGlobals s) })
 
 getNextLabel :: CodeGen LLVMLabel
@@ -152,7 +152,7 @@ getNextLabel = do
   return $ Label label
 
 emit :: LLVMInstruction -> CodeGen ()
-emit c = cgfModify (\s -> s { cgfCode = DL.snoc (cgfCode s) c }) 
+emit c = cgfModify (\s -> s { cgfCode = DL.snoc (cgfCode s) c })
 
 setMname :: String -> CodeGen ()
 setMname n = cgmModify (\s -> s {cgmName = n})
@@ -184,7 +184,7 @@ addExternalFun :: String -> LLVMType -> [LLVMType] -> CodeGen ()
 addExternalFun name rettyp argtyps = do
   let funtyp  = Tfun rettyp argtyps
       fundecl = LLVMFunctionDecl [] name funtyp
-  cgmModify (\s -> s { cgmFunEnv = Map.insert name funtyp (cgmFunEnv s) }) 
+  cgmModify (\s -> s { cgmFunEnv = Map.insert name funtyp (cgmFunEnv s) })
   cgmModify (\s -> s { cgmEFunctions = DL.snoc (cgmEFunctions s) fundecl })
 
 addExternalGC :: String -> LLVMType -> CodeGen ()
@@ -280,7 +280,7 @@ dropBreakLabel :: CodeGen ()
 dropBreakLabel = cgfModify (\s -> s { cgfBreakLabel = tail (cgfBreakLabel s) })
 
 addVar :: String -> LLVMValue -> CodeGen ()
-addVar var reg = 
+addVar var reg =
     modify (\s -> s { cgfVarEnv = Map.insert var reg (cgfVarEnv s) })
 
 getVar :: String -> CodeGen LLVMValue
@@ -311,9 +311,9 @@ getExternalGC styp = cgmGets cgmGlobals >>= lookup styp
 -- =============================================================================
 
 calcStructSize [] = return 0
-calcStructSize ((_,typ):rest) = do 
-  size <- typeSize typ 
-  rest <- calcStructSize rest 
+calcStructSize ((_,typ):rest) = do
+  size <- typeSize typ
+  rest <- calcStructSize rest
   return $ size + rest
 
 words :: Int -> Int

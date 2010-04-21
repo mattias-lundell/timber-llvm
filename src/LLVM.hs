@@ -7,30 +7,29 @@ import Data.Char (ord, intToDigit)
 import Data.List.Split (chunk)
 import Numeric
 
-data LLVMCallingConvention = Cc | Fastcc | Coldcc
-                              
+data LLVMCallingConvention = Cc | Fastcc
+
 instance Show LLVMCallingConvention where
     show Cc     = "cc"
     show Fastcc = "fastcc"
-    show Coldcc  = "coldcc"
 
 data LLVMVisibilityStyle = Default | Hidden | Protected
 
 instance Show LLVMVisibilityStyle where
     show Default   = "default"
     show Hidden    = "hidden"
-    show Protected = "protected" 
+    show Protected = "protected"
 
-data LLVMLinkage = Private 
-                 | LinkerPrivate 
-                 | Internal 
+data LLVMLinkage = Private
+                 | LinkerPrivate
+                 | Internal
                  | AvailableExternally
-                 | Linkonce 
-                 | Weak 
-                 | Common 
-                 | Appending 
+                 | Linkonce
+                 | Weak
+                 | Common
+                 | Appending
                  | ExternWeak
-                 | LinkonceOdr 
+                 | LinkonceOdr
                  | WeakOdr
                  | External
                  | Global   -- not a real linkage
@@ -43,7 +42,7 @@ instance Show LLVMLinkage where
     show Internal            = "internal"
     show AvailableExternally = "available_externally"
     show Linkonce            = "linkonce"
-    show Weak                = "weak" 
+    show Weak                = "weak"
     show Common              = "common"
     show Appending           = "appending"
     show ExternWeak          = "extern_weak"
@@ -52,7 +51,7 @@ instance Show LLVMLinkage where
     show External            = "external"
     show Global              = "global"   -- not a real linkage
     show Constant            = "constant" -- not a real linkage
-                 
+
 data LLVMType = Tint Int
               | Tfloat
               | Tdouble
@@ -71,15 +70,15 @@ instance Show LLVMType where
     show Tfloat              = "float"
     show Tdouble             = "double"
     show (Tptr typ)          = show typ ++ "*"
-    show (Tarray nelem typ)  = "[" ++ show nelem ++ " x " ++ show typ ++ "]" 
+    show (Tarray nelem typ)  = "[" ++ show nelem ++ " x " ++ show typ ++ "]"
     show Tvoid               = "void"
     show (Tstruct sname)     = '%' : sname
     show Topaque             = "opaque"
-    show (Tvector nelem typ) = "<" ++ show nelem ++ " x " ++ show typ ++ ">" 
-    show (Tunion typs)       = 
+    show (Tvector nelem typ) = "<" ++ show nelem ++ " x " ++ show typ ++ ">"
+    show (Tunion typs)       =
         "union {" ++ intercalate ", " (map show typs) ++ "}"
-    show (Tfun rettyp args)  = 
-        show rettyp ++ " (" ++ intercalate ", " (map show args) ++ ")" 
+    show (Tfun rettyp args)  =
+        show rettyp ++ " (" ++ intercalate ", " (map show args) ++ ")"
 
 data LLVMParameterAttribute = Zeroext
                             | Signext
@@ -90,7 +89,7 @@ data LLVMParameterAttribute = Zeroext
                             | Nocapture
                             | Nest
 
-instance Show LLVMParameterAttribute where                            
+instance Show LLVMParameterAttribute where
     show Zeroext   = "zeroext"
     show Signext   = "signext"
     show Inreg     = "inreg"
@@ -130,7 +129,7 @@ instance Show LLVMFunctionAttributes where
     show Naked           = "naked"
 
 data LLVMGlobalInitializer = Zeroinitializer | Null deriving (Eq)
-                             
+
 instance Show LLVMGlobalInitializer where
     show Zeroinitializer = "zeroinitializer"
     show Null            = "null"
@@ -165,11 +164,11 @@ getTyp (LLVMRegister typ _ _) = typ
 getTyp (LLVMConstant typ _) = typ
 
 showWtyp :: LLVMValue -> String
-showWtyp (LLVMRegister typ reg (TagGlobal _ _)) = 
+showWtyp (LLVMRegister typ reg (TagGlobal _ _)) =
     show typ ++ " @" ++ reg
-showWtyp (LLVMRegister typ reg TagLocal) = 
+showWtyp (LLVMRegister typ reg TagLocal) =
     show typ ++ " %" ++ reg
-showWtyp (LLVMConstant Tvoid _)   = "void"  
+showWtyp (LLVMConstant Tvoid _)   = "void"
 showWtyp (LLVMConstant typ const) = show typ ++ " " ++ show const
 
 showWOtyp :: LLVMValue -> String
@@ -188,7 +187,7 @@ data ConstValue = IntConst Int
                 | NullConst
                   deriving (Eq)
 
-instance Show ConstValue where 
+instance Show ConstValue where
     show (IntConst i)      = show i
     show (FloatConst f)    = "0x" ++ toHex (fromRational f :: Float)
     show (CharConst c)     = show.ord $ c
@@ -209,32 +208,32 @@ toHex num = map (intToDigit.fromBase 2) $ chunk 4 $ sign ++ exponent ++ mantissa
       mantissa = zpad 52 f
       f = if (head.fst $ tup) == 1 then tail.fst $ tup else fst tup
       s = snd tup
-      zpad n xs = take n $ xs ++ repeat 0 
+      zpad n xs = take n $ xs ++ repeat 0
       padz n xs = reverse.zpad n $ reverse xs
       tup = floatToDigits 2 (abs num)
       fromBase b ds = foldl' (\n k -> n * b + k) 0 ds
 
 digits :: Integral n => n -> n -> [n]
 digits base = reverse.digitsRev base
-              where 
+              where
                 digitsRev base i = case i of
                                      0 -> []
                                      _ -> lastDigit : digitsRev base rest
                                          where (rest, lastDigit) = quotRem i base
 
 -- =============================================================================
--- COMPARING 
+-- COMPARING
 -- =============================================================================
 
-data IcmpArg = IcmpEQ  
-             | IcmpNE 
-             | IcmpUGT 
-             | IcmpUGE 
-             | IcmpULT 
-             | IcmpULE 
-             | IcmpSGT 
-             | IcmpSGE 
-             | IcmpSLT 
+data IcmpArg = IcmpEQ
+             | IcmpNE
+             | IcmpUGT
+             | IcmpUGE
+             | IcmpULT
+             | IcmpULE
+             | IcmpSGT
+             | IcmpSGE
+             | IcmpSLT
              | IcmpSLE
                deriving (Eq)
 
@@ -289,7 +288,7 @@ instance Show FcmpArg where
 -- =============================================================================
 -- INSTRUCTIONS
 -- =============================================================================
-     
+
 data LLVMInstruction where
     Add  :: LLVMValue -> LLVMValue -> LLVMValue -> LLVMInstruction
     Fadd :: LLVMValue -> LLVMValue -> LLVMValue -> LLVMInstruction
@@ -327,7 +326,7 @@ data LLVMInstruction where
     Fptrunc  :: LLVMValue -> LLVMValue -> LLVMType -> LLVMInstruction
     Fpext    :: LLVMValue -> LLVMValue -> LLVMType -> LLVMInstruction
     Fptoui   :: LLVMValue -> LLVMValue -> LLVMType -> LLVMInstruction
-    Fptosi   :: LLVMValue -> LLVMValue -> LLVMType -> LLVMInstruction    
+    Fptosi   :: LLVMValue -> LLVMValue -> LLVMType -> LLVMInstruction
     Uitofp   :: LLVMValue -> LLVMValue -> LLVMType -> LLVMInstruction
     Sitofp   :: LLVMValue -> LLVMValue -> LLVMType -> LLVMInstruction
     Ptrtoint :: LLVMValue -> LLVMValue -> LLVMType -> LLVMInstruction

@@ -574,20 +574,20 @@ void init_rts(int argc, char **argv) {
     gcInit();
     gcThread = newThread(NULL, prio_min, garbageCollector, pagesize);
     newThread(NULL, prio_max, timerHandler, pagesize);
-    
+
     ENABLE(rts);
 }
 
-void new(ADDR* addr, size_t words) { 
+void new(ADDR* addr, size_t words) {
     //printf("New-call: addr=%x words=%x hp=%x\n", (int)addr, (int)words, (int)hp);
     ADDR top,stop;
-    do { 
-        *addr = hp; 
-        stop = lim; 
-        top = (*addr+words); 
+    do {
+        *addr = hp;
+        stop = lim;
+        top = (*addr+words);
     } while (!CAS(*addr,top,&hp));
-    
-    if (top>=stop) { 
+
+    if (top>=stop) {
         *addr = force(words,*addr<stop?*addr:0);
     }
 }

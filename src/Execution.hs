@@ -36,7 +36,7 @@
 -- Execution control.
 --
 -- This module contains an interface to the backend and functions to
--- control the execution of the compiler. 
+-- control the execution of the compiler.
 --
 ---------------------------------------------------------------------------
 
@@ -48,7 +48,7 @@ module Execution (
                   linkO,
                   linkBC
                  ) where
-    
+
 import System (system, exitWith, ExitCode(..))
 import qualified Monad
 import qualified Directory
@@ -69,7 +69,7 @@ compileLLVM global_cfg clo ll_file = do
                putStrLn ("[compiling " ++ ll_file ++ "]")
                execCmd clo cmdLLVMAS
              else return ()
-  where checkUpToDate ll_file bc_file = return False --do 
+  where checkUpToDate ll_file bc_file = return False --do
 -- XXX change this, all files are recomiled each time to prevent name clashes when linking
 --          bc_exists <- Directory.doesFileExist bc_file
 --          if bc_exists then do llvm_time <- Directory.getModificationTime ll_file
@@ -78,8 +78,8 @@ compileLLVM global_cfg clo ll_file = do
 --                       else return False
 
 
--- | Compile a C-file. 
-compileC global_cfg clo c_file = do 
+-- | Compile a C-file.
+compileC global_cfg clo c_file = do
   let o_file = rmSuffix ".c" (rmDirs c_file) ++ ".o"
   res <- checkUpToDate c_file o_file
   if not res then do
@@ -87,14 +87,14 @@ compileC global_cfg clo c_file = do
                cfg <- fileCfg clo c_file global_cfg
                let cmd = cCompiler cfg
                          ++ " -c " ++ compileFlags cfg
-                         ++ " -I " ++ libDir clo ++ " " 
-                         ++ " -I " ++ includeDir clo 
-                         ++ " -I " ++ rtsDir clo ++ " " 
+                         ++ " -I " ++ libDir clo ++ " "
+                         ++ " -I " ++ includeDir clo
+                         ++ " -I " ++ rtsDir clo ++ " "
                          ++ " -I . "
                          ++ c_file
                execCmd clo cmd
              else return ()
-      where checkUpToDate c_file o_file = do 
+      where checkUpToDate c_file o_file = do
                                    o_exists <- Directory.doesFileExist o_file
                                    if not o_exists then return False
                                                     else do
@@ -111,7 +111,7 @@ linkBC global_cfg clo r bc_files = do
   cfg <- foldr ((=<<) . fileCfg clo) (return global_cfg) bc_files
   let rootId     = name2str r
       Just rMod = fromMod r
-      initId     = "_init_" ++ modToundSc rMod 
+      initId     = "_init_" ++ modToundSc rMod
       -- link bc_files with libTimber.bc
       cmd1 = llvmLINK cfg ++ " "
              ++ unwords bc_files
@@ -122,24 +122,24 @@ linkBC global_cfg clo r bc_files = do
              ++ " -adce -mem2reg -std-link-opts -std-compile-opts "
              ++ llvmOptFlags clo ++ " "
              ++ tmp_bcfile
-             ++ " -f -o " 
+             ++ " -f -o "
              ++ tmp_bcfile
       -- compile to native code
-      cmd3 = llvmLLC cfg 
-             ++ tmp_bcfile ++ 
-             " -O3 -filetype=asm -o " 
-             ++ s_file 
-      -- link 
+      cmd3 = llvmLLC cfg
+             ++ tmp_bcfile ++
+             " -filetype=asm -o "
+             ++ s_file
+      -- link
       cmd4 = llvmCLANG cfg
-             ++ " -Wno-implicit-function-declaration"
+             ++ " -Wno-implicit-function-declaration -internalize "
              ++ " -L" ++ rtsDir clo
-             ++ " -O3 -m32 -DPOSIX -pthread"
+             ++ " -m32 -DPOSIX -pthread"
              ++ " -o " ++ outfile clo ++ " "
              ++ s_file
              ++ " -DROOT=" ++ rootId
              ++ " -DROOTINIT=" ++ initId ++ " "
-             ++ rtsMain clo 
-             ++ linkLibs cfg             
+             ++ rtsMain clo
+             ++ linkLibs cfg
   execCmd clo cmd1
   execCmd clo cmd2
   execCmd clo cmd3
@@ -157,16 +157,15 @@ linkO global_cfg clo r o_files =
                                        ++ compileFlags cfg
                                        ++ " -o " ++ outfile clo ++ " "
                                        ++ unwords o_files ++ " "
-                                       ++ " -L" ++ rtsDir clo ++ " " 
-                                       ++ " -I" ++ includeDir clo ++ " " 
-                                       ++ " -I" ++ libDir clo ++ " " 
-                                       ++ " -I " ++ rtsDir clo ++ " " 
-                                       ++ " -I . "  
+                                       ++ " -L" ++ rtsDir clo ++ " "
+                                       ++ " -I" ++ includeDir clo ++ " "
+                                       ++ " -I" ++ libDir clo ++ " "
+                                       ++ " -I " ++ rtsDir clo ++ " "
+                                       ++ " -I . "
                                        ++ " -DROOT=" ++ rootId ++ " "
                                        ++ " -DROOTINIT=" ++ initId ++ " "
-                                       ++ rtsMain clo 
+                                       ++ rtsMain clo
                                        ++ linkLibs cfg
-                             tr $ cmd
                              execCmd clo cmd
 
 -- | Return with exit code /= 0
@@ -177,7 +176,7 @@ stopCompiler          = exitWith (ExitSuccess)
 
 execCmd clo cmd       = do Monad.when (isVerbose clo)
                                     (putStrLn ("exec: " ++ show cmd))
-                           exitCode <- system $ cmd     
+                           exitCode <- system $ cmd
                            case exitCode of
                              ExitSuccess -> return ()
                              _           -> stopCompiler
