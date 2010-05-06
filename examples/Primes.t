@@ -1,6 +1,6 @@
 module Primes where
 
-import POSIX 
+import POSIX
 
 root :: World -> Cmd () ()
 root w = do
@@ -14,7 +14,6 @@ root w = do
    env.stdout.write (show ct++"\n")
    env.exit 0
 
-
 primes limit = class
    primesBound = limit `div` log3 limit
 
@@ -22,7 +21,7 @@ primes limit = class
    count  := 0
 
    isPrime k = loop 0
-      where loop n = do 
+      where loop n = do
               p = primes!n
               if p*p > k then
                  result True
@@ -34,7 +33,7 @@ primes limit = class
 
    checkFrom k = do
      p <- isPrime k
-     if p then 
+     if p then
         primes!count := k
         count := count + 1
      if k < limit then checkFrom (k+1)
@@ -45,8 +44,7 @@ primes limit = class
      checkFrom 3
      result count
 
-
 log3 :: Int -> Int
-log3 n  
+log3 n
   | n < 3       = 0
   | otherwise   = 1 + log3 (n `div` 3)

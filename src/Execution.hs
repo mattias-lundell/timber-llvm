@@ -60,14 +60,20 @@ import Name
 
 compileLLVM global_cfg clo ll_file = do
   let bc_file = rmSuffix ".ll" ll_file ++ ".bc"
-      s_file  = rmSuffix ".ll" (rmDirs ll_file) ++ ".s"
-      o_file  = rmSuffix ".ll" (rmDirs ll_file) ++ ".o"
   res <- checkUpToDate ll_file bc_file
   if not res then do
                cfg <- fileCfg clo ll_file global_cfg
                let cmdLLVMAS = llvmLLVMAS cfg ++ " -f " ++ ll_file
+                   cmdLLVMOPT = llvmOPT cfg
+                                ++ " -mem2reg "
+                                ++ " -std-compile-opts "
+                                ++ " -std-link-opts "
+                                ++ " -strip "
+                                ++ bc_file
+                                ++ " -f -o " ++ bc_file
                putStrLn ("[compiling " ++ ll_file ++ "]")
                execCmd clo cmdLLVMAS
+               execCmd clo cmdLLVMOPT
              else return ()
   where checkUpToDate ll_file bc_file = return False --do
 -- XXX change this, all files are recomiled each time to prevent name clashes when linking
@@ -76,7 +82,6 @@ compileLLVM global_cfg clo ll_file = do
 --                               bc_time   <- Directory.getModificationTime bc_file
 --                               return (llvm_time <= bc_time)
 --                       else return False
-
 
 -- | Compile a C-file.
 compileC global_cfg clo c_file = do
@@ -112,38 +117,25 @@ linkBC global_cfg clo r bc_files = do
   let rootId     = name2str r
       Just rMod = fromMod r
       initId     = "_init_" ++ modToundSc rMod
-      -- link bc_files with libTimber.bc
-      cmd1 = llvmLINK cfg ++ " "
-             ++ unwords bc_files
-             ++ " -o "
-             ++ tmp_bcfile
-      -- apply llvm optimizations
-      cmd2 = llvmOPT cfg
-             ++ " -adce -mem2reg -std-link-opts -std-compile-opts "
-             ++ llvmOptFlags clo ++ " "
-             ++ tmp_bcfile
-             ++ " -f -o "
-             ++ tmp_bcfile
-      -- compile to native code
-      cmd3 = llvmLLC cfg
-             ++ tmp_bcfile ++
-             " -filetype=asm -o "
-             ++ s_file
-      -- link
-      cmd4 = llvmCLANG cfg
-             ++ " -Wno-implicit-function-declaration -internalize "
+      -- create main.bc
+      cmd1 = llvmLLVMAS cfg
+             ++ " main.ll "
+             ++ " -o main.bc"
+      -- link main and program files
+      cmd2 = llvmLD cfg
+             ++ " -Xlinker='-m32' "
+             ++ " -native "
+             ++ " -internalize "
              ++ " -L" ++ rtsDir clo
-             ++ " -m32 -DPOSIX -pthread"
              ++ " -o " ++ outfile clo ++ " "
-             ++ s_file
-             ++ " -DROOT=" ++ rootId
-             ++ " -DROOTINIT=" ++ initId ++ " "
-             ++ rtsMain clo
-             ++ linkLibs cfg
+             ++ " main.bc " ++ unwords bc_files ++ " "
+             ++ " -b " ++ tmp_bcfile ++ " "
+             ++ " -lTimberLLVMLIB "
+             ++ " -lTimberLLVMRTS "
+             ++ " -lpthread"
+  writeFile "main.ll" (llvmMain rMod)
   execCmd clo cmd1
   execCmd clo cmd2
-  execCmd clo cmd3
-  execCmd clo cmd4
 
 -- | Link together a bunch of object files.
 linkO global_cfg clo r o_files =
@@ -205,3 +197,23 @@ fileCfg clo file global_cfg =
     base path = case break (`elem` "/.") (reverse path) of
                   (rext,'.':rbase) -> reverse rbase
                   _ -> path
+
+--   \%PTHREAD_MUTEX_T = type {[44 x i8]}\n\
+llvmMain mod =
+  "%Ref = type {i32*, %PTHREAD_MUTEX_T, i32*}\n\
+  \%PTHREAD_MUTEX_T = type {[24 x i8]}\n\
+  \%WORLD = type {opaque}\n\
+  \declare void @_init_"++ mod ++ "()\n\
+  \declare void @root_" ++ mod ++ "(%WORLD*, %Ref*)\n\
+  \declare %Ref* @init_rts(i32, i8**)\n\
+  \declare void @pruneStaticHeap()\n\
+  \declare i32 @sleep_rts()\n\n\
+  \define i32 @main(i32 %argc, i8** %argv) nounwind {\n\
+  \  entry:\n\
+  \  %envObj =tail call %Ref* @init_rts(i32 %argc, i8** %argv) nounwind\n\
+  \  tail call void @_init_" ++ mod ++ "() nounwind\n\
+  \  tail call void @pruneStaticHeap() nounwind\n\
+  \  tail call void @root_" ++ mod ++ "(%WORLD* null, %Ref* %envObj) nounwind\n\
+  \  tail call i32 @sleep_rts() nounwind\n\
+  \  ret i32 0\n\
+  \}\n"

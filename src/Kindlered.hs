@@ -93,6 +93,8 @@ tailOptimize f t te c                   = return c
                                    }
 -}
 
+isTailRecursive f (CBind False [(_, Val t (ECall g _ _))] (CRet (ENew (Tuple 0 _) _ _)))
+  | t == tUNIT                          = f == g
 isTailRecursive f (CRet (ECall g _ _))  = f == g
 isTailRecursive f (CRun _ c)            = isTailRecursive f c
 isTailRecursive f (CBind _ _ c)         = isTailRecursive f c
@@ -108,7 +110,8 @@ isTailRecursiveAlt f (ACon _ _ _ c)     = isTailRecursive f c
 isTailRecursiveAlt f (ALit _ c)         = isTailRecursive f c
 isTailRecursiveAlt f (AWild c)          = isTailRecursive f c
 
-
+redTailCall x vs (CBind False [(_, Val t (ECall y ts es))] (CRet (ENew (Tuple 0 _) _ _)))
+  | t == tUNIT && x == y                = updateParams vs es
 redTailCall f vs (CRet (ECall g _ es))
   | f == g                              = updateParams vs es
 redTailCall f vs (CBind r bs c)         = liftM (CBind r bs) (redTailCall f vs c)

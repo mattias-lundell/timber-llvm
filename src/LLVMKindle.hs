@@ -375,9 +375,6 @@ fun = Tfun
 struct :: String -> LLVMType
 struct = Tstruct
 
-union :: [LLVMType] -> LLVMType
-union = Tunion
-
 array :: Int -> LLVMType -> LLVMType
 array = Tarray
 
@@ -524,23 +521,23 @@ frem = emitBinaryOp Frem
 icmp = emitCmpOp Icmp
 fcmp = emitCmpOp Fcmp
 
-bitcast  = emitCast Bitcast 
+bitcast  = emitCast Bitcast
 ptrtoint = emitCast Ptrtoint
 inttoptr = emitCast Inttoptr
 sitofp   = emitCast Sitofp
 fptosi   = emitCast Fptosi
 trunc typ@(Tint n) op1 = do
   let (Tint n') = getTyp op1
-  if n == n' 
-     then return op1 
+  if n == n'
+     then return op1
      else do
        r1 <- getNewReg typ
        emit $ Trunc r1 op1 typ
        return r1
 zext typ@(Tint n) op1 = do
   let (Tint n') = getTyp op1
-  if n == n' 
-     then return op1 
+  if n == n'
+     then return op1
      else do
        r1 <- getNewReg typ
        emit $ Zext r1 op1 typ
@@ -594,7 +591,7 @@ extractelement op1 op2 = do
   let (Tvector _ typ) = getTyp op1
   r1 <- getNewReg typ
   emit $ Extractelement r1 op1 op2
-  return r1           
+  return r1
 insertelement  op1 op2 op3 = do
   r1 <- getNewReg (getTyp op1)
   emit $ Insertelement r1 op1 op2 op3
@@ -625,7 +622,7 @@ k2llvmType typ = case typ of
                    TCon (Prim Time _) _       -> timestruct
                    TCon (Prim TIMERTYPE _) _  -> timerstruct
                    TCon (Prim AbsTime _) _    -> struct "AbsTime"
-                   TCon (Prim World _) _      -> worldstruct 
+                   TCon (Prim World _) _      -> worldstruct
                    TCon (Prim Array _) _      -> arraystruct
                    TCon (Tuple 0 _) _         -> tup0struct
                    TCon (Tuple 2 _) _         -> tup2struct
@@ -636,7 +633,7 @@ k2llvmType typ = case typ of
                    TCon (Prim LEFT _)_        -> leftstruct
                    TCon (Prim RIGHT _)_       -> rightstruct
                    TCon name@(Name _ _ _ _) _ -> ptr $ struct (k2llvmName name)
-                   _                          -> error $ "ERROR IN k2llvmType: " ++ show typ   
+                   _                          -> error $ "ERROR IN k2llvmType: " ++ show typ
 
 -- Transform Name data to string
 k2llvmName :: Name -> String
@@ -645,7 +642,7 @@ k2llvmName (Name s t (Just _) a)
 k2llvmName (Name s t _ _)
   | t == 0 = s
 k2llvmName (Name s t m a)       = id ++ tag ++ mod
-  where 
+  where
     id                          = if okForC s then s else "_sym"
     tag                         = if mod=="" || generated a || id=="_sym" then '_':show t else ""
     mod                         = maybe "" (('_' :) . modToundSc) m

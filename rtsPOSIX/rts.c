@@ -538,7 +538,8 @@ Int getNumberOfProcessors() {
     return 1;
 }
 
-void init_rts(int argc, char **argv) {
+Ref init_rts(int argc, char **argv) {
+    Ref envObj;
     argc0 = argc;
     argv0 = argv;
 
@@ -546,11 +547,11 @@ void init_rts(int argc, char **argv) {
     pthread_mutexattr_settype(&glob_mutexattr, PTHREAD_MUTEX_NORMAL);
     pthread_mutexattr_setprotocol(&glob_mutexattr, PTHREAD_PRIO_INHERIT);
     pthread_mutex_init(&rts, &glob_mutexattr);
-    
+
     pthread_mutexattr_init(&obj_mutexattr);
     pthread_mutexattr_settype(&obj_mutexattr, PTHREAD_MUTEX_NORMAL);
     pthread_mutexattr_setprotocol(&obj_mutexattr, PTHREAD_PRIO_INHERIT);
-    
+
     prio_min = sched_get_priority_min(SCHED_RR);
     prio_max = sched_get_priority_max(SCHED_RR);
     pthread_key_create(&current_key, NULL);
@@ -561,25 +562,33 @@ void init_rts(int argc, char **argv) {
     sigaddset(&all_sigs, SIGALRM);
     sigaddset(&all_sigs, SIGSELECT);
     pthread_sigmask(SIG_BLOCK, &all_sigs, NULL);
-    
+
     pthread_cond_init(&sleepVar, NULL);
 
     DISABLE(rts);
-    
+
     NCORES = getNumberOfProcessors();
     NTHREADS = NCORES * 4;
     if (NTHREADS > MAXTHREADS)
         NTHREADS = MAXTHREADS;
-    
+
     gcInit();
     gcThread = newThread(NULL, prio_min, garbageCollector, pagesize);
     newThread(NULL, prio_max, timerHandler, pagesize);
 
     ENABLE(rts);
+    NEW (Ref, envObj, WORDS(sizeof(struct Ref)));
+    INITREF(envObj);
+    return envObj;
+
+    //    gcInit();
+    //    gcThread = newThread(NULL, prio_min, garbageCollector, pagesize);
+    //    newThread(NULL, prio_max, timerHandler, pagesize);
+
+    //    ENABLE(rts);
 }
 
 void new(ADDR* addr, size_t words) {
-    //printf("New-call: addr=%x words=%x hp=%x\n", (int)addr, (int)words, (int)hp);
     ADDR top,stop;
     do {
         *addr = hp;

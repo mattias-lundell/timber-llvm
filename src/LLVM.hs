@@ -62,7 +62,6 @@ data LLVMType = Tint Int
               | Topaque
               | Tstruct String
               | Tvector Int LLVMType
-              | Tunion [LLVMType]
                 deriving (Eq, Ord)
 
 instance Show LLVMType where
@@ -75,11 +74,10 @@ instance Show LLVMType where
     show (Tstruct sname)     = '%' : sname
     show Topaque             = "opaque"
     show (Tvector nelem typ) = "<" ++ show nelem ++ " x " ++ show typ ++ ">"
-    show (Tunion typs)       =
-        "union {" ++ intercalate ", " (map show typs) ++ "}"
     show (Tfun rettyp args)  =
         show rettyp ++ " (" ++ intercalate ", " (map show args) ++ ")"
 
+{-
 data LLVMParameterAttribute = Zeroext
                             | Signext
                             | Inreg
@@ -88,7 +86,8 @@ data LLVMParameterAttribute = Zeroext
                             | Noalias
                             | Nocapture
                             | Nest
-
+-}
+{-
 instance Show LLVMParameterAttribute where
     show Zeroext   = "zeroext"
     show Signext   = "signext"
@@ -98,7 +97,8 @@ instance Show LLVMParameterAttribute where
     show Noalias   = "noalias"
     show Nocapture = "nocapture"
     show Nest      = "nest"
-
+-}
+{-
 data LLVMFunctionAttributes = Alwaysinline
                             | Inlinehint
                             | Noinline
@@ -112,7 +112,8 @@ data LLVMFunctionAttributes = Alwaysinline
                             | Noredzone
                             | Noimplicitfloat
                             | Naked
-
+-}
+{-
 instance Show LLVMFunctionAttributes where
     show Alwaysinline    = "alwaysinline"
     show Inlinehint      = "inlinehint"
@@ -127,10 +128,11 @@ instance Show LLVMFunctionAttributes where
     show Noredzone       = "noredzone"
     show Noimplicitfloat = "noimplicitfloat"
     show Naked           = "naked"
+-}
 
-data LLVMGlobalInitializer = Zeroinitializer | Null deriving (Eq)
+data LLVMGlobalInit = Zeroinitializer | Null deriving (Eq)
 
-instance Show LLVMGlobalInitializer where
+instance Show LLVMGlobalInit where
     show Zeroinitializer = "zeroinitializer"
     show Null            = "null"
 
@@ -155,7 +157,7 @@ data LLVMValue = LLVMRegister LLVMType String LLVMRegisterTag
                | LLVMConstant LLVMType ConstValue
                  deriving (Eq,Show)
 
-data LLVMRegisterTag = TagGlobal [LLVMLinkage] (Maybe LLVMGlobalInitializer)
+data LLVMRegisterTag = TagGlobal [LLVMLinkage] (Maybe LLVMGlobalInit)
                      | TagLocal
                        deriving (Eq, Show)
 

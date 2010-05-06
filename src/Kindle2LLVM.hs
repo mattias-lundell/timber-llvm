@@ -422,6 +422,8 @@ k2llvmExp (ECast ktotype exp1) = do
                         | n == n' = return reg
                         | n > n'  = trunc totyp reg
                 Tvector _ _ -> bitcast totype r1
+                Tfloat -> sitofp float r1
+                x -> fail (show x)
     Tvector _ _ -> case totype of
                      Tint _ -> bitcast totype r1
                      Tptr _ -> bitcast int r1 >>= inttoptr totype

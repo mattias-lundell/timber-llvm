@@ -161,17 +161,17 @@ extern WORD __GG__Time[] ;
 #error "Can not define CAS on your architecture."
 #endif
 #endif
-/*
+
 #define NEW(t,addr,words)       { ADDR top,stop; \
                                   do { addr = (t)hp; stop = lim; top = ((ADDR)addr)+(words); } \
                                   while (!CAS(addr,top,&hp)); \
                                   if (top>=stop) { addr = (t)force((words),(ADDR)addr<stop?(ADDR)addr:0);} }
-*/
 
+/*
 #define NEW(t,addr,words)       { ADDR tmp; \
                                   new(&tmp,words); \
-                                  addr = (t)tmp; } 
-
+                                  addr = (t)tmp; }
+*/
 // Note: soundness of the spin-loop above depends on the invariant that lim is never changed unless hp also changes.
 
 #define CURRENT()               ((Thread)pthread_getspecific(current_key))
@@ -209,7 +209,7 @@ struct FunList;
 typedef struct FunList *FunList;
 
 struct FunList {
-  void (*f) (); 
+  void (*f) ();
   FunList next;
 };
 
@@ -219,6 +219,6 @@ char **getArgv();
 Thread newThread(Msg m, int prio, void *(*fun)(void *), int stacksize) ;
 
 // new does the same thing as the macro NEW but as a callable function
-inline void new(ADDR* addr, size_t bytes);
-//void __attribute__((always_inline)) new(ADDR* addr, size_t bytes) ;
+//void new(ADDR* addr, size_t bytes);
+inline void new(ADDR* addr, size_t bytes) __attribute__((always_inline)) ;
 #endif

@@ -93,7 +93,7 @@ instance PP LLVMType where
 instance PP [LLVMLinkage] where
     pp linkage = hcat $ punctuate (text " ") (map (text.show) linkage)
 
-instance PP LLVMGlobalInitializer where
+instance PP LLVMGlobalInit where
     pp init = text $ show init
 
 instance PP LLVMFunctionDecl where
