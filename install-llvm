@@ -1,15 +1,26 @@
-# compile rts.c
-clang -g -m32 -pthread -D_GNU_SOURCE=1 -Wall -fno-strict-aliasing -g -I../include -I../lib -I. -c rts.c -emit-llvm -o rts.bc
+# remove old .bc and .ll files
+rm *.bc *.ll &> /dev/null
 
-# POSIX.extern.c to bc file
-clang -g -m32 -pthread -D_GNU_SOURCE=1 -Wall -fno-strict-aliasing -g -I../include -I../lib -I. -c ../lib/POSIX.extern.c -emit-llvm -o POSIX.extern.bc
+##
+## RUN-TIME SYSTEM
+##
 
+# rts.c => rts.bc
+clang -O3 -m32 -pthread -D_GNU_SOURCE=1 -fno-strict-aliasing -g -I../include -I../lib -I. -c rts.c -emit-llvm -o rts.bc
+
+# POSIX.extern.c => POSIX.extern.bc
+clang -O3 -m32 -pthread -D_GNU_SOURCE=1 -fno-strict-aliasing -g -I../include -I../lib -I. -c ../lib/POSIX.extern.c -emit-llvm -o POSIX.extern.bc
+
+# rts.bc + POSIX.extern.bc => libTimberLLVMRTS.a
+llvm-ar rc libTimberLLVMRTS.a rts.bc POSIX.extern.bc
+
+##
+## STANDARD LIBRARY
+##
+
+# compile std-library
 cd ../lib
-timberc --api --llvm *.t
-cd ../rtsPOSIX
-
-# copy library files
-cp ../lib/*.bc .
-
-# link
-llvm-link *.bc -o libTimber.bc
+rm *.bc *.ll &> /dev/null
+timberc --llvm *.t
+llvm-ar rc libTimberLLVMLIB.a BitOps.bc Data.Functional.List.bc Data.Objects.Dictionary.bc Data.Objects.Stack.bc Prelude.bc POSIX.bc
+mv libTimberLLVMLIB.a ../rtsPOSIX
