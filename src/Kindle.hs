@@ -914,4 +914,3 @@ instance Binary AType where
       1 -> get >>= \a -> get >>= \b -> return (TVar a b)
       2 -> get >>= \a -> return (TThis a)
       _ -> fail "no parse"
-

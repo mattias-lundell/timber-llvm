@@ -181,8 +181,7 @@ gcArray v (EVar x)
          return $ intConst (LLVMKindle.words offset)
 gcArray v (ELit lit) = return $ lit2const lit
 
-
-k2llvmValBinds (_,binds) = mapM_ f binds >> mapM_ g binds
+k2llvmValBinds (rec,binds) | not rec || isSafe binds = mapM_ f binds >> mapM_ g binds
     where f (vname, Val vtyp (ENew ntyp [] binds)) = do
             let typ = k2llvmType vtyp
                 name = k2llvmName vname
@@ -223,6 +222,145 @@ k2llvmValBinds (_,binds) = mapM_ f binds >> mapM_ g binds
           g (vname, Val vtyp (ECast _ (ENew ntyp [] binds))) =
               k2llvmStructBinds (ECast (tCon ntyp) (EVar vname)) ntyp binds
           g _ = return ()
+          vs                      = dom binds
+          isSafe bs               = all isConst bs && strictBs bs `intersect` vs == []
+          isConst (_, Val _ (ENew _ _ _))           = True
+          isConst (_, Val _ (ECast _ (ENew _ _ _))) = True
+          isConst _                                 = False
+k2llvmValBinds (_,bs)  = do
+            -- store var "roots"
+            roots <- alloca arraystruct
+            addVar "roots" roots
+            r1 <- call "CYCLIC_BEGIN" [intConst size, intConst n_upd]
+            store r1 roots
+            zipWithM_ (f roots) [0..] bs
+            zipWith3M_ (g roots) [0..] upd bs
+            r2 <- load roots
+            hp <- lookupVar "hp"
+            r3 <- load (fromJust hp)
+            callvoid "CYCLIC_END" [r2,r3]
+            where size   = length bs
+                  upd    = updates [] bs
+                  n_upd  = length (filter id upd)
+                  {-
+                  f i (x, Val t (ENew (Prim Ref _) _ _))
+                                = internalError0 "new Ref in k2llvmValBinds"
+                   -}
+                  f root i (vname, Val _ (ENew (Prim Ref _) _ _)) = internalError0 "new Ref in k2llvmValBinds"
+                  {-
+                    f i (x, Val t _)
+                                = k2cName x <+> text "=" <+> k2cExp (rootInd' t i) <> text ";"
+                   -}
+                  f root i (vname, Val vtyp _) = do
+                        let typ = k2llvmType vtyp
+                            name = k2llvmName vname
+                        r1 <- k2llvmExp (rootInd' vtyp i)
+                        var <- lookupVar name
+                        case var of
+                          Just reg -> store r1 reg
+                          Nothing -> do
+                                   r2 <- alloca typ
+                                   store r1 r2
+                                   addVar name r2
+                  {-
+                  g i u (x, Val t (ENew n [] bs'))
+                                = update u i $$
+                                  newCall t x [n] $$
+                                  k2cExp (rootInd i) <+> text "=" <+> k2cExp (ECast tPOLY (EVar x)) <> text ";" $$
+                                  k2cStructBinds (rootInd' t i) n bs'
+                   -}
+                  g root i u (vname, Val vtyp (ENew ntyp [] binds)) = do
+                        update u root i
+                        let typ = k2llvmType vtyp
+                            name = k2llvmName vname
+                        size <- getStructSize (dropPtrs typ)
+                        var <- lookupVar name
+                        r1 <- k2llvmNew var typ size
+                        addVar name r1
+                        r2 <- k2llvmExp (rootInd i)
+                        r3 <- k2llvmExp (ECast tPOLY (EVar vname))
+                        store r3 r2
+                        k2llvmStructBinds (rootInd' vtyp i) ntyp binds
+                        --r2 <- rootInd i
+                  {-
+                    g i u (x, Val t (ECast _ (ENew n [] bs')))
+                                = update u i $$
+                                  newCall t x [n] $$
+                                  k2cExp (rootInd i) <+> text "=" <+> k2cExp (ECast tPOLY (EVar x)) <> text ";" $$
+                                  k2cStructBinds (ECast (tCon n) (rootInd' t i)) n bs'
+                   -}
+                  g root i u (vname, Val vtyp (ECast _ (ENew ntyp [] binds))) = do
+                        update u root i
+                        let typ = k2llvmType vtyp
+                            name = k2llvmName vname
+                        size <- getStructSize (dropPtrs typ)
+                        var <- lookupVar name
+                        r1 <- k2llvmNew var typ size
+                        addVar name r1
+                        r2 <- k2llvmExp (rootInd i)
+                        r3 <- k2llvmExp (ECast tPOLY (EVar vname))
+                        store r3 r2
+                        k2llvmStructBinds (ECast (tCon ntyp) (rootInd' vtyp i)) ntyp binds
+                  {-
+                    g i u (x, Val t e)
+                                = update u i $$
+                                  k2cName x <+> text "=" <+> k2cExp e <> text ";" $$
+                                  k2cExp (rootInd i) <+> text "=" <+> k2cExp (ECast tPOLY (EVar x)) <> text ";"
+
+                   -}
+                  g root i u (vname, Val vtyp e)      = do
+                        update u root i
+                        let typ = k2llvmType vtyp
+                            name = k2llvmName vname
+                        r1 <- k2llvmExp e
+                        var <- lookupVar name
+                        case var of
+                          Just reg -> do
+                                   store r1 reg
+                                   r2 <- k2llvmExp (rootInd i)
+                                   r3 <- k2llvmExp (ECast tPOLY (EVar vname))
+                                   store r3 r2
+                          Nothing -> do
+                                   r2 <- alloca typ
+                                   store r1 r2
+                                   addVar name r2
+                                   r3 <- k2llvmExp (rootInd i)
+                                   r4 <- k2llvmExp (ECast tPOLY (EVar vname))
+                                   store r4 r3
+                  update True root i = do
+                           hp <- lookupVar "hp"
+                           r1 <- load (fromJust hp)
+                           callvoid "CYCLIC_UPDATE" [root,r1]
+                  update False _ _ = return ()
+                  rootInd i      = ECall (prim IndexArray) [] [ELit (lInt 0), EVar (name0 "roots"), ELit (lInt i)]
+                  rootInd' t i   = ECast t (ECall (prim IndexArray) [] [ELit (lInt 0), EVar (name0 "roots"), ELit (lInt i)])
+                  zipWithM_ f xs ys = sequence_ (zipWith f xs ys)
+                  zipWith3M_ f xs ys zx = sequence_ (zipWith3 f xs ys zx)
+
+-- XXX updates, strictBs, strict and strictRhs is already in Kindle2C
+updates prev []                 = []
+updates prev ((x,Val _ e):bs)   = mustUpdate : updates ((x,fwrefs):prev') bs
+  where computed                = dom prev
+        bwrefs                  = filter (not . isPatTemp) (strictRhs e `intersect` computed)
+        fragile                 = concat [ fws | (y,fws) <- prev, y `elem` bwrefs ]
+        mustUpdate              = not (null (fragile `intersect` computed))
+        fwrefs                  = evars e `intersect` (x:dom bs)
+        prev' | mustUpdate      = [ (y,fws \\ computed) | (y,fws) <- prev ]
+              | otherwise       = prev
+
+strictBs bs                     = concat [ strict e | (_,Val _ e) <- bs ]
+                                -- We assume all free variables of function closures have been extracted as value
+                                -- bindings by llift, hence only Val patterns need to be considered above
+strict (ECast _ e)              = strict e
+strict (ESel e l)               = evars e
+strict (EEnter e l [] es)       = evars (e:es)
+strict (ECall f [] es)          = evars es
+strict (ENew _ [] bs)           = strictBs bs
+strict _                        = []
+
+strictRhs (EVar x)              = [x]
+strictRhs (ECast _ e)           = strictRhs e
+strictRhs e                     = strict e
 
 bindGCINFO r0 typ exp = do
   let typ = getTyp r0
@@ -423,7 +561,7 @@ k2llvmExp (ECast ktotype exp1) = do
                         | n > n'  = trunc totyp reg
                 Tvector _ _ -> bitcast totype r1
                 Tfloat -> sitofp float r1
-                x -> fail (show x)
+                x -> internalError0 ("k2llvmExp - ECast: " ++ show x)
     Tvector _ _ -> case totype of
                      Tint _ -> bitcast totype r1
                      Tptr _ -> bitcast int r1 >>= inttoptr totype
@@ -603,18 +741,32 @@ codeGenECall (Prim name _) exps
                     EmptyArray -> mapM k2llvmExp exps >>= call "EmptyArray"
                     IndexArray -> do
                       [_,arr,i] <- mapM k2llvmExp exps
-                      getelementptr poly [intConst 2,i] arr >>= load
+                      getelementptr poly [intConst 2,i] arr --  >>= load
                     SizeArray  -> do
                       [_,arr] <- mapM k2llvmExp exps
                       getstructelemptr "size" arr >>= load
                     -- Message functions
                     LOCK   -> mapM k2llvmExp exps >>= call "LOCK"
                     UNLOCK -> mapM k2llvmExp exps >>= call "UNLOCK"
-                    ASYNC ->  mapM k2llvmExp exps >>= call "ASYNC"
+                    ASYNC  ->  mapM k2llvmExp exps >>= call "ASYNC"
                     -- Various functions
-                    Raise      -> mapM k2llvmExp exps >>= call "Raise"
-                    Abort      -> mapM k2llvmExp exps >>= call "ABORT"
-                    _ -> fail $ show name ++ " " ++ show exps
+                    Raise -> mapM k2llvmExp exps >>= call "Raise"
+                    Abort -> mapM k2llvmExp exps >>= call "ABORT"
+                    -- Mathematical functions
+                    Sqrt  -> mapM k2llvmExp exps >>= call "sqrt"
+                    Log   -> mapM k2llvmExp exps >>= call "log"
+                    Log10 -> mapM k2llvmExp exps >>= call "log10"
+                    Exp   -> mapM k2llvmExp exps >>= call "exp"
+                    Sin   -> mapM k2llvmExp exps >>= call "sin"
+                    Cos   -> mapM k2llvmExp exps >>= call "cos"
+                    Tan   -> mapM k2llvmExp exps >>= call "tan"
+                    Asin  -> mapM k2llvmExp exps >>= call "asin"
+                    Acos  -> mapM k2llvmExp exps >>= call "acos"
+                    Atan  -> mapM k2llvmExp exps >>= call "atan"
+                    Sinh  -> mapM k2llvmExp exps >>= call "sinh"
+                    Cosh  -> mapM k2llvmExp exps >>= call "cosh"
+                    -- Error
+                    _ -> internalError0 ("codeGenECall " ++ show name ++ " " ++ show exps)
 codeGenECall name exps = do
   exps' <- mapM k2llvmExp exps
   let fname = k2llvmName name

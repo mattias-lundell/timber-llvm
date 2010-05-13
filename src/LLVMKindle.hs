@@ -357,6 +357,9 @@ bool = Tint 1
 word :: LLVMType
 word = Tint 32
 
+addr :: LLVMType
+addr = ptr word
+
 poly :: LLVMType
 poly = ptr word
 
@@ -464,9 +467,9 @@ true = LLVMConstant bool (BoolConst True)
 false :: LLVMValue
 false = LLVMConstant bool (BoolConst False)
 floatConst :: Rational -> LLVMValue
-floatConst x = LLVMConstant float (FloatConst x) 
+floatConst x = LLVMConstant float (FloatConst x)
 intConst :: (Integral a) => a -> LLVMValue
-intConst n = LLVMConstant int (IntConst (read (show n)::Int)) 
+intConst n = LLVMConstant int (IntConst (read (show n)::Int))
 charConst :: Char -> LLVMValue
 charConst c = LLVMConstant char (CharConst c)
 voidConst :: LLVMValue

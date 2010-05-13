@@ -194,13 +194,13 @@ k2cValBinds (rec,bs)
                                   vcat (map g bs)
   where f (x, Val t (ENew (Prim Ref _) _ _))
                                 = internalError0 "new Ref in k2cValBinds"
-        f (x, Val t (ENew n [] bs)) 
+        f (x, Val t (ENew n [] bs))
                                 = newCall t x [n]
         f (x, Val t (ECast _ (ENew n [] bs)))
                                 = newCall t x [n]
         f (x, Val t e)          = k2cName x <+> text "=" <+> k2cExp e <> text ";"
         f _                     = empty
-        g (x, Val t (ENew n [] bs)) 
+        g (x, Val t (ENew n [] bs))
                                 = k2cStructBinds (EVar x) n bs
         g (x, Val t (ECast _ (ENew n [] bs)))
                                 = k2cStructBinds (ECast (tCon n) (EVar x)) n bs
@@ -239,7 +239,6 @@ k2cValBinds (_,bs)              = text ("{   Array roots = CYCLIC_BEGIN(" ++ sho
         rootInd i               = ECall (prim IndexArray) [] [ELit (lInt 0), EVar (name0 "roots"), ELit (lInt i)]
         rootInd' t i            = ECast t (rootInd i)
 
-
 strictBs bs                     = concat [ strict e | (_,Val _ e) <- bs ]
                                 -- We assume all free variables of function closures have been extracted as value
                                 -- bindings by llift, hence only Val patterns need to be considered above
@@ -263,7 +262,7 @@ updates prev ((x,Val _ e):bs)   = mustUpdate : updates ((x,fwrefs):prev') bs
         fwrefs                  = evars e `intersect` (x:dom bs)
         prev' | mustUpdate      = [ (y,fws \\ computed) | (y,fws) <- prev ]
               | otherwise       = prev
-        
+
 
 
 newCall t x [n] | isBigTuple n  = text "NEW" <+> parens (k2cType t <> text "," <+> 

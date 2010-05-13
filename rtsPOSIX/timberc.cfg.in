@@ -1,13 +1,12 @@
 CfgOpts
-      { cCompiler = "gcc -DPOSIX" 
-      , llvmCLANG = "clang"
+      { cCompiler = "gcc -DPOSIX "
+      , llvmCLANG = "clang "
       , llvmLLVMAS = "llvm-as "
       , llvmLLC = "llc "
-      , llvmAS = "as "
-      , llvmLD = "llvm-ld "
-      , llvmLINK = "llvm-link"
+      , llvmLLVMLD = "llvm-ld "
+      , llvmLLVMLINK = "llvm-link "
       ,	llvmOPT = "opt "
       , compileFlags = " @CFLAGS@ "
       , linkFlags = " @LDFLAGS@ "
-      , linkLibs = " -lTimber "
+      , linkLibs = " -lTimber -lm "
       }

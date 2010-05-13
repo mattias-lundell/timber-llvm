@@ -113,7 +113,7 @@ void subst(Array roots, int limit, ADDR stop, Thread current_thread) {
         ADDR p = (ADDR)roots + STATIC_SIZE(roots->GCINFO) + roots->size;
         int i;
         for (i = 0; i < limit; i++)
-                if (ISPLACEHOLDER(roots->elems[i])) 
+                if (ISPLACEHOLDER(roots->elems[i]))
                         RAISE(2);
         while (p != stop)
                 p = substObj(p, roots, limit, current_thread);
@@ -141,4 +141,3 @@ void CYCLIC_END(Array roots, ADDR stop) {
         current_thread->placeholders -= roots->size;
         subst(roots, roots->size, stop, current_thread);
 }
-

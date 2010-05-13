@@ -122,7 +122,7 @@ linkBC global_cfg clo r bc_files = do
              ++ " main.ll "
              ++ " -o main.bc"
       -- link main and program files
-      cmd2 = llvmLD cfg
+      cmd2 = llvmLLVMLD cfg
              ++ " -Xlinker='-m32' "
              ++ " -native "
              ++ " -internalize "
@@ -132,6 +132,7 @@ linkBC global_cfg clo r bc_files = do
              ++ " -b " ++ tmp_bcfile ++ " "
              ++ " -lTimberLLVMLIB "
              ++ " -lTimberLLVMRTS "
+             ++ " -lm "
              ++ " -lpthread"
   writeFile "main.ll" (llvmMain rMod)
   execCmd clo cmd1

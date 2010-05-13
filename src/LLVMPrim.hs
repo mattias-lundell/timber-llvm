@@ -1,5 +1,6 @@
 module LLVMPrim where
 
+import LLVM
 import LLVMKindle
 
 genPrimitives = do
@@ -106,6 +107,26 @@ genPrimitives = do
   addExternalFun "primShowFloat" liststruct [float]
   addExternalFun "ABORT" bit8 [bit32,msgstruct,refstruct]
   addExternalFun "primTIMERTERM" timerstruct [int]
+  addExternalFun "CYCLIC_BEGIN" arraystruct [int,int]
+  addExternalFun "CYCLIC_UPDATE" void [arraystruct, int, addr]
+  addExternalFun "CYCLIC_END" void [arraystruct, addr]
+
+  -- mathematical functions
+  addExternalFun "sqrt"  float [float]
+  addExternalFun "log"   float [float]
+  addExternalFun "log10" float [float]
+  addExternalFun "exp"   float [float]
+  addExternalFun "sin"   float [float]
+  addExternalFun "cos"   float [float]
+  addExternalFun "tan"   float [float]
+  addExternalFun "asin"  float [float]
+  addExternalFun "acos"  float [float]
+  addExternalFun "atan"  float [float]
+  addExternalFun "sinh"  float [float]
+  addExternalFun "cosh"  float [float]
+
+  -- The heap pointer, used by CYCLIC_*
+  addGlobalVar "hp" (LLVMRegister (ptr poly) "hp" (TagGlobal [External,Global] Nothing))
 
   -- References to external GC tags, all arrays of unknown lenght with int elements
   addExternalGC "TUP2"   (array 0 int)
