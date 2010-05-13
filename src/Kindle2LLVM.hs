@@ -251,14 +251,15 @@ k2llvmValBinds (_,bs)  = do
                     f i (x, Val t _)
                                 = k2cName x <+> text "=" <+> k2cExp (rootInd' t i) <> text ";"
                    -}
+                  -- s1_Cyclic = (S_Cyclic)roots->elems[0];
                   f root i (vname, Val vtyp _) = do
-                        let typ = k2llvmType vtyp
+                        let typ  = k2llvmType vtyp
                             name = k2llvmName vname
-                        r1 <- k2llvmExp (rootInd' vtyp i)
+                        r1  <- k2llvmExp (rootInd' vtyp i)
                         var <- lookupVar name
                         case var of
                           Just reg -> store r1 reg
-                          Nothing -> do
+                          Nothing  -> do
                                    r2 <- alloca typ
                                    store r1 r2
                                    addVar name r2
@@ -269,16 +270,29 @@ k2llvmValBinds (_,bs)  = do
                                   k2cExp (rootInd i) <+> text "=" <+> k2cExp (ECast tPOLY (EVar x)) <> text ";" $$
                                   k2cStructBinds (rootInd' t i) n bs'
                    -}
+
+                  {-
+                    k2llvmCmd (CUpdA array index newval cmd1) = do
+                      r1 <- k2llvmExp array
+                      r2 <- k2llvmExp index
+                      r3 <- k2llvmExp newval
+                      let etyp = getTyp r3
+                      (offset,typ) <- getStructIndex (struct "Array") "elems"
+                      r4 <- getelementptr typ [intConst offset] r1
+                      getelementptr etyp [r2] r4 >>= store r3
+                      k2llvmCmd cmd1
+                   -}
+                  -- k2llvmCmd
                   g root i u (vname, Val vtyp (ENew ntyp [] binds)) = do
                         update u root i
-                        let typ = k2llvmType vtyp
+                        let typ  = k2llvmType vtyp
                             name = k2llvmName vname
                         size <- getStructSize (dropPtrs typ)
-                        var <- lookupVar name
-                        r1 <- k2llvmNew var typ size
+                        var  <- lookupVar name
+                        r1   <- k2llvmNew var typ size
                         addVar name r1
-                        r2 <- k2llvmExp (rootInd i)
-                        r3 <- k2llvmExp (ECast tPOLY (EVar vname))
+                        r2   <- k2llvmExp (rootInd i)
+                        r3   <- k2llvmExp (ECast tPOLY (EVar vname))
                         store r3 r2
                         k2llvmStructBinds (rootInd' vtyp i) ntyp binds
                         --r2 <- rootInd i
@@ -306,7 +320,6 @@ k2llvmValBinds (_,bs)  = do
                                 = update u i $$
                                   k2cName x <+> text "=" <+> k2cExp e <> text ";" $$
                                   k2cExp (rootInd i) <+> text "=" <+> k2cExp (ECast tPOLY (EVar x)) <> text ";"
-
                    -}
                   g root i u (vname, Val vtyp e)      = do
                         update u root i
@@ -517,6 +530,10 @@ k2llvmExp (ESel exp1 name) = do
   let typ@(Tptr typ_noptr) = getTyp r1
   (offset,typ) <- getStructIndex typ_noptr (k2llvmName name)
   getelementptr typ [intConst offset] r1 >>= load
+-- Used by cyclic data structures
+k2llvmExp (ECall (Prim IndexArray _ ) [] exps@([_,EVar (Name a _ _ _),_])) | a == "roots" = do
+  [_,arr,i] <- mapM k2llvmExp exps
+  getelementptr poly [intConst 2,i] arr
 k2llvmExp (ECall name atypes exps) = codeGenECall name exps
 k2llvmExp (EEnter (ECast clos@(TCon (Prim CLOS _) (rettyp:typs)) fun) fname atypes exps) = do
   let rettyp' = k2llvmType rettyp
@@ -534,6 +551,11 @@ k2llvmExp (EEnter exp fname atypes exps) = do
   r3 <- load =<< getelementptr typ [intConst offset] r1
   exps' <- mapM k2llvmExp (exp:exps)
   callhigher r3 typ exps'
+-- Used by cyclic data structures
+k2llvmExp (ECast ktotype exp@(ECall (Prim IndexArray _ ) [] [_,EVar (Name a _ _ _),_])) | a == "roots" = do
+  r1 <- load =<< k2llvmExp exp
+  let totype = k2llvmType ktotype
+  k2llvmCastExp totype r1
 -- boolean "optimizations" casts
 k2llvmExp (ECast (TCon (Prim Bool _) _) (ECast _ (ELit (LInt _ 1)))) = return true
 k2llvmExp (ECast (TCon (Prim Bool _) _) (ECast _ (ELit (LInt _ 0)))) = return false
@@ -544,8 +566,11 @@ k2llvmExp (ECast (TCon (Prim BITS16 _) _) (ELit (LInt _ n))) = return (bit16Cons
 k2llvmExp (ECast (TCon (Prim BITS8  _) _) (ELit (LInt _ n))) = return (bit8Const  n)
 k2llvmExp (ECast ktotype exp1) = do
   r1 <- k2llvmExp exp1
-  let totype   = k2llvmType ktotype
-      fromtype = getTyp r1
+  let totype = k2llvmType ktotype
+  k2llvmCastExp totype r1
+
+k2llvmCastExp totype r1 = do
+  let fromtype = getTyp r1
   case fromtype of
     Tptr _ -> case totype of
                 Tint _ -> ptrtoint totype r1
@@ -741,7 +766,7 @@ codeGenECall (Prim name _) exps
                     EmptyArray -> mapM k2llvmExp exps >>= call "EmptyArray"
                     IndexArray -> do
                       [_,arr,i] <- mapM k2llvmExp exps
-                      getelementptr poly [intConst 2,i] arr --  >>= load
+                      getelementptr poly [intConst 2,i] arr >>= load
                     SizeArray  -> do
                       [_,arr] <- mapM k2llvmExp exps
                       getstructelemptr "size" arr >>= load
