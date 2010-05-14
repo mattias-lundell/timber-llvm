@@ -112,18 +112,18 @@ genPrimitives = do
   addExternalFun "CYCLIC_END" void [arraystruct, addr]
 
   -- mathematical functions
-  addExternalFun "sqrt"  float [float]
-  addExternalFun "log"   float [float]
-  addExternalFun "log10" float [float]
-  addExternalFun "exp"   float [float]
-  addExternalFun "sin"   float [float]
-  addExternalFun "cos"   float [float]
-  addExternalFun "tan"   float [float]
-  addExternalFun "asin"  float [float]
-  addExternalFun "acos"  float [float]
-  addExternalFun "atan"  float [float]
-  addExternalFun "sinh"  float [float]
-  addExternalFun "cosh"  float [float]
+  addExternalFun "sqrtf"  float [float]
+  addExternalFun "logf"   float [float]
+  addExternalFun "log10f" float [float]
+  addExternalFun "expf"   float [float]
+  addExternalFun "sinf"   float [float]
+  addExternalFun "cosf"   float [float]
+  addExternalFun "tanf"   float [float]
+  addExternalFun "asinf"  float [float]
+  addExternalFun "acosf"  float [float]
+  addExternalFun "atanf"  float [float]
+  addExternalFun "sinhf"  float [float]
+  addExternalFun "coshf"  float [float]
 
   -- The heap pointer, used by CYCLIC_*
   addGlobalVar "hp" (LLVMRegister (ptr poly) "hp" (TagGlobal [External,Global] Nothing))
