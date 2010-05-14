@@ -45,28 +45,28 @@ module Config (
                -- Our Data from files/flags.
                CfgOpts(..),
                CmdLineOpts(..),
-               
+
                -- Read out configuration from file.
                readCfg,
                parseCfg,
 
                -- Query about our options from flags.
                cmdLineOpts,
-                          
+
                -- Configurable paths
                libDir,
                includeDir,
                rtsDir,
                rtsCfg,
                rtsMain,
-               
+
                -- Print usage info and exit.
                helpMsg,
-                      
+
                -- Pass data. XXX Does not belong here?
                Pass(..),
                allPasses,
-                        
+
                -- Dynamic Exceptions
                TimbercException(..),
                ) where
@@ -90,6 +90,7 @@ data CfgOpts         = CfgOpts { cCompiler    :: FilePath,
                                  llvmLLVMLD   :: FilePath,
                                  llvmLLVMLINK :: FilePath,
                                  llvmOPT      :: FilePath,
+                                 llvmLinkLibs :: FilePath,
                                  compileFlags :: String,
                                  linkFlags    :: String,
                                  linkLibs     :: String
@@ -111,7 +112,7 @@ data CmdLineOpts     = CmdLineOpts { isVerbose    :: Bool,
                                      dumpAfter    :: Pass -> Bool,
                                      stopAfter    :: Pass -> Bool,
                                      doLLVM       :: Bool,
-                                     llvmOptFlags :: String   
+                                     llvmOptFlags :: String
                                    }
 
 options              :: [OptDescr Flag]
@@ -119,16 +120,16 @@ options              = [ Option []
                                 ["help"]
                                 (NoArg Help)
                                 "Show this message",
-                         Option [] 
-                                ["version"] 
+                         Option []
+                                ["version"]
                                 (NoArg Version)
                                 "Print version information",
-                         Option [] 
-                                ["print-datadir"] 
+                         Option []
+                                ["print-datadir"]
                                 (NoArg PrintDatadir)
                                 "Print effective datadir path",
-                         Option ['v'] 
-                                ["verbose"] 
+                         Option ['v']
+                                ["verbose"]
                                 (NoArg Verbose)
                                 "Be verbose",
                          Option []
@@ -139,9 +140,9 @@ options              = [ Option []
                                 ["target"]
                                 (ReqArg Target "TARGET")
                                 "Target platform",
-                         Option ['o'] 
-                                ["output"]  
-                                (ReqArg Outfile "FILE")     
+                         Option ['o']
+                                ["output"]
+                                (ReqArg Outfile "FILE")
                                 "Name of executable output",
                          Option []
                                 ["root"]
@@ -155,20 +156,20 @@ options              = [ Option []
                                 ["api"]
                                 (NoArg Api)
                                 "Produce html file with API",
-                         Option [] 
-                                ["pager"] 
+                         Option []
+                                ["pager"]
                                 (ReqArg Pager "PATH")
                                 "Use command PATH to display .html files",
                          Option ['s']
                                 ["shortcut"]
                                 (NoArg ShortCut)
                                 "Try to reuse existing .c, .h and .ti files",
-                         Option ['C'] 
+                         Option ['C']
                                 ["stop-at-c"]
                                 (NoArg StopAtC)
                                 "Stop compiler after .c file generation",
-                         Option ['c'] 
-                                ["stop-at-o"] 
+                         Option ['c']
+                                ["stop-at-o"]
                                 (NoArg StopAtO)
                                 "Stop compiler after .o file generation",
                          Option ['S']
@@ -184,23 +185,20 @@ options              = [ Option []
                                 (ReqArg LLVMOptFlags "LLVM-flag")
                                 "Provide LLVM optimization flags"
                        ]
-                       ++ 
+                       ++
                        [ Option []
                                 ["dump-" ++ map Char.toLower (show pass)]
                                 (NoArg $ DumpAfter pass)
                                 ("Dump " ++ show pass ++ " output to stdout")
-                       | pass <- allPasses 
-                       ] 
-                       ++ 
+                       | pass <- allPasses
+                       ]
+                       ++
                        [ Option []
                                 ["stop-after-" ++ map Char.toLower (show pass)]
                                 (NoArg $ StopAfter pass)
                                 ("Stop compiler after pass " ++ show pass)
-                       | pass <- allPasses 
+                       | pass <- allPasses
                        ]
-                       
-
-
 
 data Flag            = Help
                      | Verbose

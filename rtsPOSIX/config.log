@@ -105,10 +105,10 @@ configure:2985: result: i686-pc-linux-gnu
 configure:3203: checking for the pthreads library -lpthreads
 configure:3246: gcc -o conftest -g -O2 -m32    conftest.c -lpthreads  >&5
 /usr/bin/ld: error: cannot find -lpthreads
-/usr/bin/ld: /tmp/ccqQYfO1.o: in function main:conftest.c:12: error: undefined reference to 'pthread_join'
-/usr/bin/ld: /tmp/ccqQYfO1.o: in function main:conftest.c:13: error: undefined reference to '__pthread_register_cancel'
-/usr/bin/ld: /tmp/ccqQYfO1.o: in function main:conftest.c:14: error: undefined reference to 'pthread_create'
-/usr/bin/ld: /tmp/ccqQYfO1.o: in function main:conftest.c:14: error: undefined reference to '__pthread_unregister_cancel'
+/usr/bin/ld: /tmp/ccjZmabK.o: in function main:conftest.c:12: error: undefined reference to 'pthread_join'
+/usr/bin/ld: /tmp/ccjZmabK.o: in function main:conftest.c:13: error: undefined reference to '__pthread_register_cancel'
+/usr/bin/ld: /tmp/ccjZmabK.o: in function main:conftest.c:14: error: undefined reference to 'pthread_create'
+/usr/bin/ld: /tmp/ccjZmabK.o: in function main:conftest.c:14: error: undefined reference to '__pthread_unregister_cancel'
 collect2: ld returned 1 exit status
 configure:3253: $? = 1
 configure: failed program was:
@@ -132,10 +132,10 @@ configure: failed program was:
 configure:3276: result: no
 configure:3148: checking whether pthreads work without any flags
 configure:3246: gcc -o conftest -g -O2 -m32    conftest.c   >&5
-/usr/bin/ld: /tmp/ccZjxpi8.o: in function main:conftest.c:12: error: undefined reference to 'pthread_join'
-/usr/bin/ld: /tmp/ccZjxpi8.o: in function main:conftest.c:13: error: undefined reference to '__pthread_register_cancel'
-/usr/bin/ld: /tmp/ccZjxpi8.o: in function main:conftest.c:14: error: undefined reference to 'pthread_create'
-/usr/bin/ld: /tmp/ccZjxpi8.o: in function main:conftest.c:14: error: undefined reference to '__pthread_unregister_cancel'
+/usr/bin/ld: /tmp/cc4SkErO.o: in function main:conftest.c:12: error: undefined reference to 'pthread_join'
+/usr/bin/ld: /tmp/cc4SkErO.o: in function main:conftest.c:13: error: undefined reference to '__pthread_register_cancel'
+/usr/bin/ld: /tmp/cc4SkErO.o: in function main:conftest.c:14: error: undefined reference to 'pthread_create'
+/usr/bin/ld: /tmp/cc4SkErO.o: in function main:conftest.c:14: error: undefined reference to '__pthread_unregister_cancel'
 collect2: ld returned 1 exit status
 configure:3253: $? = 1
 configure: failed program was:
@@ -160,10 +160,10 @@ configure:3276: result: no
 configure:3153: checking whether pthreads work with -Kthread
 configure:3246: gcc -o conftest -g -O2 -m32 -Kthread   conftest.c   >&5
 gcc: unrecognized option '-Kthread'
-/usr/bin/ld: /tmp/ccNqh879.o: in function main:conftest.c:12: error: undefined reference to 'pthread_join'
-/usr/bin/ld: /tmp/ccNqh879.o: in function main:conftest.c:13: error: undefined reference to '__pthread_register_cancel'
-/usr/bin/ld: /tmp/ccNqh879.o: in function main:conftest.c:14: error: undefined reference to 'pthread_create'
-/usr/bin/ld: /tmp/ccNqh879.o: in function main:conftest.c:14: error: undefined reference to '__pthread_unregister_cancel'
+/usr/bin/ld: /tmp/ccbMqKKU.o: in function main:conftest.c:12: error: undefined reference to 'pthread_join'
+/usr/bin/ld: /tmp/ccbMqKKU.o: in function main:conftest.c:13: error: undefined reference to '__pthread_register_cancel'
+/usr/bin/ld: /tmp/ccbMqKKU.o: in function main:conftest.c:14: error: undefined reference to 'pthread_create'
+/usr/bin/ld: /tmp/ccbMqKKU.o: in function main:conftest.c:14: error: undefined reference to '__pthread_unregister_cancel'
 collect2: ld returned 1 exit status
 configure:3253: $? = 1
 configure: failed program was:
@@ -188,10 +188,10 @@ configure:3276: result: no
 configure:3153: checking whether pthreads work with -kthread
 configure:3246: gcc -o conftest -g -O2 -m32 -kthread   conftest.c   >&5
 gcc: unrecognized option '-kthread'
-/usr/bin/ld: /tmp/cc6kPCje.o: in function main:conftest.c:12: error: undefined reference to 'pthread_join'
-/usr/bin/ld: /tmp/cc6kPCje.o: in function main:conftest.c:13: error: undefined reference to '__pthread_register_cancel'
-/usr/bin/ld: /tmp/cc6kPCje.o: in function main:conftest.c:14: error: undefined reference to 'pthread_create'
-/usr/bin/ld: /tmp/cc6kPCje.o: in function main:conftest.c:14: error: undefined reference to '__pthread_unregister_cancel'
+/usr/bin/ld: /tmp/ccjtqjpW.o: in function main:conftest.c:12: error: undefined reference to 'pthread_join'
+/usr/bin/ld: /tmp/ccjtqjpW.o: in function main:conftest.c:13: error: undefined reference to '__pthread_register_cancel'
+/usr/bin/ld: /tmp/ccjtqjpW.o: in function main:conftest.c:14: error: undefined reference to 'pthread_create'
+/usr/bin/ld: /tmp/ccjtqjpW.o: in function main:conftest.c:14: error: undefined reference to '__pthread_unregister_cancel'
 collect2: ld returned 1 exit status
 configure:3253: $? = 1
 configure: failed program was:
@@ -216,10 +216,10 @@ configure:3276: result: no
 configure:3203: checking for the pthreads library -llthread
 configure:3246: gcc -o conftest -g -O2 -m32    conftest.c -llthread  >&5
 /usr/bin/ld: error: cannot find -llthread
-/usr/bin/ld: /tmp/ccXFylGk.o: in function main:conftest.c:12: error: undefined reference to 'pthread_join'
-/usr/bin/ld: /tmp/ccXFylGk.o: in function main:conftest.c:13: error: undefined reference to '__pthread_register_cancel'
-/usr/bin/ld: /tmp/ccXFylGk.o: in function main:conftest.c:14: error: undefined reference to 'pthread_create'
-/usr/bin/ld: /tmp/ccXFylGk.o: in function main:conftest.c:14: error: undefined reference to '__pthread_unregister_cancel'
+/usr/bin/ld: /tmp/cckom5X2.o: in function main:conftest.c:12: error: undefined reference to 'pthread_join'
+/usr/bin/ld: /tmp/cckom5X2.o: in function main:conftest.c:13: error: undefined reference to '__pthread_register_cancel'
+/usr/bin/ld: /tmp/cckom5X2.o: in function main:conftest.c:14: error: undefined reference to 'pthread_create'
+/usr/bin/ld: /tmp/cckom5X2.o: in function main:conftest.c:14: error: undefined reference to '__pthread_unregister_cancel'
 collect2: ld returned 1 exit status
 configure:3253: $? = 1
 configure: failed program was:

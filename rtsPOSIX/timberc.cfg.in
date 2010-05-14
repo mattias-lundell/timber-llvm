@@ -6,6 +6,7 @@ CfgOpts
       , llvmLLVMLD = "llvm-ld "
       , llvmLLVMLINK = "llvm-link "
       ,	llvmOPT = "opt "
+      , llvmLinkLibs = " -lTimberLLVM -lm -lpthread "
       , compileFlags = " @CFLAGS@ "
       , linkFlags = " @LDFLAGS@ "
       , linkLibs = " -lTimber -lm "

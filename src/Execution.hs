@@ -130,10 +130,11 @@ linkBC global_cfg clo r bc_files = do
              ++ " -o " ++ outfile clo ++ " "
              ++ " main.bc " ++ unwords bc_files ++ " "
              ++ " -b " ++ tmp_bcfile ++ " "
-             ++ " -lTimberLLVMLIB "
-             ++ " -lTimberLLVMRTS "
-             ++ " -lm "
-             ++ " -lpthread"
+--             ++ " -lTimberLLVMLIB "
+--             ++ " -lTimberLLVMRTS "
+--             ++ " -lm "
+--             ++ " -lpthread"
+             ++ llvmLinkLibs cfg
   writeFile "main.ll" (llvmMain rMod)
   execCmd clo cmd1
   execCmd clo cmd2
