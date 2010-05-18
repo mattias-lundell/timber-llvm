@@ -320,6 +320,7 @@ words :: Int -> Int
 words bytes = Prelude.div (bytes+4-1) 4
 
 typeSize :: LLVMType -> CodeGen Int
+typeSize (Tint 1) = return 1
 typeSize (Tint n) = return (n `Prelude.div` 8)
 typeSize (Tptr _) = return 4
 typeSize Tfloat = return 4

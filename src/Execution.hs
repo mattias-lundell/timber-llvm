@@ -125,16 +125,13 @@ linkBC global_cfg clo r bc_files = do
       cmd2 = llvmLLVMLD cfg
              ++ " -Xlinker='-m32' "
              ++ " -native "
-             ++ " -internalize "
              ++ " -L" ++ rtsDir clo
              ++ " -o " ++ outfile clo ++ " "
              ++ " main.bc " ++ unwords bc_files ++ " "
              ++ " -b " ++ tmp_bcfile ++ " "
---             ++ " -lTimberLLVMLIB "
---             ++ " -lTimberLLVMRTS "
---             ++ " -lm "
---             ++ " -lpthread"
-             ++ llvmLinkLibs cfg
+             ++ if doLLVMFast clo
+                  then " -lTimberLLVMLIB -lTimberRTS -lpthread -lm -disable-opt"
+                  else llvmLinkLibs cfg ++ " -internalize"
   writeFile "main.ll" (llvmMain rMod)
   execCmd clo cmd1
   execCmd clo cmd2

@@ -2,10 +2,10 @@ module Echo where
 
 import POSIX
 
-root :: World -> Cmd () ()
-root w = do
+root :: RootType
+root world = do
 
-   env = new posix w
+   env = new posix world
 
    echo str = action
       env.stdout.write str

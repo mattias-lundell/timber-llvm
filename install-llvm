@@ -20,6 +20,12 @@ cd ../lib
 rm *.bc *.ll &> /dev/null
 timberc --llvm *.t
 
-# create archive
+# create archive with everything - used for slow LTO linking
 cd ../rtsPOSIX
 llvm-ar rc libTimberLLVM.a ../lib/*.bc rts.bc POSIX.extern.bc
+
+# archive run-time system - used for fast linking
+ar rc libTimberRTS.a rts.o POSIX.extern.o
+
+# create std-library archive - used together with libTimberRTS for fast linking
+llvm-ar rc libTimberLLVMLIB.a ../lib/*.bc

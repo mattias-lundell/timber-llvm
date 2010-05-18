@@ -112,7 +112,7 @@ data CmdLineOpts     = CmdLineOpts { isVerbose    :: Bool,
                                      dumpAfter    :: Pass -> Bool,
                                      stopAfter    :: Pass -> Bool,
                                      doLLVM       :: Bool,
-                                     llvmOptFlags :: String
+                                     doLLVMFast     :: Bool
                                    }
 
 options              :: [OptDescr Flag]
@@ -181,9 +181,9 @@ options              = [ Option []
                                 (NoArg LLVM)
                                 "Compile to LLVM",
                          Option []
-                                ["llvmopt"]
-                                (ReqArg LLVMOptFlags "LLVM-flag")
-                                "Provide LLVM optimization flags"
+                                ["llvmfast"]
+                                (NoArg LLVMFast)
+                                "Speed up LLVM compilation"
                        ]
                        ++
                        [ Option []
@@ -218,7 +218,7 @@ data Flag            = Help
                      | DumpAfter Pass
                      | StopAfter Pass
                      | LLVM
-                     | LLVMOptFlags String
+                     | LLVMFast
                      deriving (Show,Eq)
 
 data TimbercException
@@ -294,10 +294,9 @@ mkCmdLineOpts flags =
                   dumpAfter    = find . DumpAfter,
                   stopAfter    = find . StopAfter,
                   doLLVM       = find LLVM,
-                  llvmOptFlags = first ""
-                                 [ llvmflags | LLVMOptFlags llvmflags <- flags ]
+                  doLLVMFast   = find LLVMFast
                 }
-  where 
+  where
     first def []      = def
     first def (opt:_) = opt
     find  opt         = first False [ True | flag <- flags, flag == opt ]
@@ -312,7 +311,7 @@ parseCfg file
              (\e -> Exception.throwIO $ emsg file)
       config <- safeRead file txt
       return config
-    where        
+    where
         safeRead :: FilePath -> String -> IO CfgOpts
         safeRead file text =
             let val = case [x | (x,t) <- reads text, ("","") <- lex t] of
@@ -343,7 +342,7 @@ data Pass            = Parser
                      | K2LLVM
                      | Main                  -- top level 'pass'
                      deriving (Show,Eq,Ord,Enum)
-                        
+
 allPasses            :: [Pass]
 allPasses            = [Parser .. K2LLVM]
 
