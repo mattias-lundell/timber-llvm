@@ -63,16 +63,17 @@ compileLLVM global_cfg clo ll_file = do
   res <- checkUpToDate ll_file bc_file
   if not res then do
                cfg <- fileCfg clo ll_file global_cfg
-               let cmdLLVMAS = llvmLLVMAS cfg ++ " -f " ++ ll_file
+               let --cmdLLVMAS = llvmLLVMAS cfg ++ " -f " ++ ll_file
                    cmdLLVMOPT = llvmOPT cfg
                                 ++ " -mem2reg "
                                 ++ " -std-compile-opts "
                                 ++ " -std-link-opts "
                                 ++ " -strip "
-                                ++ bc_file
+                                ++ ll_file
+--                                ++ bc_file
                                 ++ " -f -o " ++ bc_file
                putStrLn ("[compiling " ++ ll_file ++ "]")
-               execCmd clo cmdLLVMAS
+--               execCmd clo cmdLLVMAS
                execCmd clo cmdLLVMOPT
              else return ()
   where checkUpToDate ll_file bc_file = return False --do

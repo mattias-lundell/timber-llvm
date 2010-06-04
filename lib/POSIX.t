@@ -32,7 +32,7 @@
 -- POSSIBILITY OF SUCH DAMAGE.
 
 module POSIX where
-    
+
 type RootType = World -> Cmd () ()
 
 struct Env where
@@ -50,11 +50,11 @@ struct Closable where
 
 struct File < Closable where
     seek  :: Int -> Request Int
-    
+
 struct RFile < File where
     read     :: Request String
     installR :: (String -> Action) -> Request ()
-    
+
 struct WFile < File where
     write    :: String -> Request Int
     installW :: Action -> Request ()
@@ -71,7 +71,7 @@ struct Socket < Closable where
     inFile     :: RFile
     outFile    :: WFile
 
-struct Connection < Closable where 
+struct Connection < Closable where
     established :: Action
     neterror    :: String -> Action
 
